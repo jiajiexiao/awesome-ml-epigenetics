@@ -82,9 +82,3 @@ Your contributions are always welcome! Please read the contribution guidelines f
 5. Check your spelling and grammar
 6. Make sure your text editor is set to remove trailing whitespace
 7. Add your suggestion to the most relevant category
-
-## License
-
-[![CC0](https://licensebuttons.net/p/zero/1.0/88x31.png)](https://creativecommons.org/publicdomain/zero/1.0/)
-
-To the extent possible under law, the authors have waived all copyright and related or neighboring rights to this work.
