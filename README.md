@@ -18,9 +18,11 @@ A curated list of "awesome" machine learning resources, datasets, and papers in 
 ## Papers
 
 ### DNA Methylation
-
+- [Epigenomic language models powered by Cerebras](https://arxiv.org/abs/2112.07571) (2021) - BERT model pretrained on human genome and across 127 cell types with DNA sequence and paired epigenetic state inputs. 
 - [MethylNet: Deep learning for DNA methylation analysis](https://bmcbioinformatics.biomedcentral.com/articles/10.1186/s12859-020-3443-8) (2020) - VAE for analyzing DNA methylation data.
 - [DeepCpG: Accurate prediction of single-cell DNA methylation states using deep learning](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-017-1189-z) (2017) - CNN model for predicting single-cell DNA methylation states.
+- [Detection of significantly differentially methylated regions in targeted bisulfite sequencing data](https://academic.oup.com/bioinformatics/article/29/13/1647/200453) (2013) - Stats model for identifying differentially methylated region (DMR) from microarray data (i.e. clustering/segment).
+- [A nonparametric Bayesian approach for clustering bisulfate-based DNA methylation profiles](https://link.springer.com/article/10.1186/1471-2164-13-S6-S20) (2012) - Bayesian stats model for clustering/segment microarray data. 
 
 ### Histone Modifications
 
@@ -71,13 +73,13 @@ A curated list of "awesome" machine learning resources, datasets, and papers in 
 
 ## Contributing
 
-Your contributions are always welcome! Please read the contribution guidelines first.
+Your contributions are always welcome! Please following the guidelines to contribute.
 
 ### Guidelines for Contributing
 
 1. Ensure your suggestion is not already included
 2. Make an individual pull request for each suggestion
-3. Use the following format: `[Resource Name](Link) (Year) - Description`
+3. Use the following format: `[Resource Name](Link) (Year) - Description.`
 4. Keep descriptions concise and clear
 5. Check your spelling and grammar
 6. Make sure your text editor is set to remove trailing whitespace
