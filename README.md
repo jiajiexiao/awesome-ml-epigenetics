@@ -66,7 +66,9 @@ A curated list of "awesome" machine learning resources, datasets, and papers in 
 ## Datasets
 
 - [ENCODE](https://www.encodeproject.org/) - Encyclopedia of DNA Elements.
-- [Roadmap Epigenomics](http://www.roadmapepigenomics.org/) - Comprehensive mapping of epigenomic states.
+- [Roadmap Epigenomics](http://www.roadmapepigenomics.org/) - Comprehensive
+  mapping of epigenomic states.
+- [TCGA](https://www.cancer.gov/ccg/research/genome-sequencing/tcga)/[GDC](https://portal.gdc.cancer.gov/) - The Cancer Genome Atlas/Genomic Data Commons contains comprehensive multi-omics data including DNA methylation (450K/EPIC arrays), RNA-seq, WGS/WES, and clinical information across 33+ cancer types. Data can be accessed through GDC Data Portal or API.
 - [GEO](https://www.ncbi.nlm.nih.gov/geo/) - Gene Expression Omnibus, contains various epigenetics datasets.
 - [EWAS Atlas](https://bigd.big.ac.cn/ewas/) - A comprehensive database for epigenome-wide association studies.
 - [ClockBase](http://gladyshevlab.org:3838/ClockBase/) - A curated methylation database for biological ages.
