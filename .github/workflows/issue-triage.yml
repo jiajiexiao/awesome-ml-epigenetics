@@ -6,10 +6,11 @@ on:
   issue_comment:
     types: [created, edited]
 
-# Only needs to read repo content and write issue comments
+# Needs to push a branch, open PRs, and comment on the issue
 permissions:
-  contents: read
+  contents: write
   issues: write
+  pull-requests: write
 
 jobs:
   triage:
@@ -23,10 +24,14 @@ jobs:
     timeout-minutes: 10
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      COMMENT_FILE: /tmp/triage_comment.md
+      PR_BODY_FILE: /tmp/pr_body.md
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v6
@@ -37,29 +42,52 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
-      - name: Validate submission
-        id: validate
+      - name: Resolve, classify, and inject suggestions
+        id: triage
         env:
           ISSUE_BODY: ${{ github.event.issue.body }}
           ISSUE_COMMENT: ${{ github.event.comment.body || '' }}
           ISSUE_URL: ${{ github.event.issue.html_url }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PYTHONPATH: ${{ github.workspace }}
-          COMMENT_FILE: /tmp/triage_comment.md
         run: uv run python -m scripts.issue_triage
         continue-on-error: true
 
-      - name: Post or update validation comment
+      - name: Create pull request
+        id: cpr
+        if: steps.triage.outputs.has_changes == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.PR_PAT }}
+          base: main
+          branch: ${{ steps.triage.outputs.branch }}
+          title: ${{ steps.triage.outputs.pr_title }}
+          body-path: /tmp/pr_body.md
+          labels: from-issue
+          delete-branch: true
+
+      - name: Post or update issue comment
+        if: always()
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
             let body;
             try {
-              body = fs.readFileSync('/tmp/triage_comment.md', 'utf8');
+              body = fs.readFileSync(process.env.COMMENT_FILE, 'utf8');
             } catch (e) {
-              body = '⚠️ Validation could not run — check the [workflow logs]('
+              body = '⚠️ Triage could not run — check the [workflow logs]('
                 + `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}`
                 + `/actions/runs/${context.runId}).`;
+            }
+
+            const prNum = '${{ steps.cpr.outputs.pull-request-number }}';
+            const prUrl = '${{ steps.cpr.outputs.pull-request-url }}';
+            if (prNum) {
+              body += `\n\n### 📌 Pull request opened\n`
+                + `[#${prNum}](${prUrl}) — this issue will **close automatically** `
+                + `when the PR is merged.`;
             }
 
             // Update existing bot comment rather than posting duplicates on edits
