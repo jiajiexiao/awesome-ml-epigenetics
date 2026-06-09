@@ -352,6 +352,8 @@ Fires as a `workflow_run` event after `review-gate` completes. Before merging it
 
 Uses `secrets.PR_PAT` (a fine-grained PAT) throughout; the standard `GITHUB_TOKEN` cannot trigger further workflow runs. A GitHub release is cut only for the scheduled `auto-update/papers-*` batches, not for issue-sourced PRs.
 
+**Branch cleanup.** The repo has *Automatically delete head branches* enabled, so every merged PR's branch is removed by GitHub; `auto-merge.yml` also deletes the branch explicitly as a backstop, and `stale-suggestions.yml` deletes branches of suggestion PRs it closes. Branches therefore don't accumulate — the only long-lived refs are `main` and any active suggestion/auto-update branch with an open PR.
+
 ### `stale-suggestions.yml` — close stalled suggestions after a grace period
 
 - **Triggers:** daily `schedule` (06:00 UTC) plus manual `workflow_dispatch`
