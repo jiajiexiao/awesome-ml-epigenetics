@@ -73,6 +73,8 @@ A curated list of "awesome" machine learning resources, datasets, and papers in 
 - [CancerDetector: ultrasensitive and non-invasive cancer detection at the resolution of individual reads using cell-free DNA methylation sequencing data](https://academic.oup.com/nar/article/46/15/e89/5036349) (2018) - Statistical model for read-level cancer detection from cfDNA.
 
 <!-- AUTO-PAPERS:LIQUID_BIOPSY START -->
+- [Noninvasive detection and prognostic stratification of biliary tract cancer using cell-free DNA fragmentomics: a model development and validation study](https://doi.org/10.1186/s43556-026-00468-7) (2026) - Machine-learning-based integration of cfDNA fragmentomic features for non-invasive detection of biliary tract cancer.
+- [Epigenetic Instability-Based Metrics in Cell-Free DNA for Early Cancer Detection.](https://doi.org/10.1158/1078-0432.CCR-25-3384) (2026) - Machine learning-based epigenetic instability metrics for cancer detection using cell-free DNA.
 <!-- AUTO-PAPERS:LIQUID_BIOPSY END -->
 
 ### Novel Epigenetic Assays
