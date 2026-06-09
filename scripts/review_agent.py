@@ -108,7 +108,10 @@ Respond with ONLY this JSON (no other text):
 {{
   "decision": "include" | "exclude" | "needs-review",
   "score": <float 0-10>,
-  "rationale": "<1-2 sentences citing title/abstract evidence>"
+  "rationale": "<1 sentence naming the SPECIFIC model architecture (e.g. BERT, CNN, \
+XGBoost, random forest, VAE, transformer encoder) AND its precise epigenetics task \
+(e.g. 'XGBoost classifier for cfDNA fragmentomics-based cancer detection'). \
+Do NOT use generic phrases like 'machine learning-based' or 'deep learning approach'.>"
 }}"""
 
 
@@ -170,8 +173,12 @@ Respond with ONLY this JSON:
   "decision": "include" | "exclude" | "needs-review",
   "score": <float 0-10>,
   "rationale": "<2-3 sentences citing specific evidence from sections above>",
-  "suggested_description": "<one concise sentence starting with the method type, \
-e.g. Transformer-based... / CNN-based...>"
+  "suggested_description": "<one sentence naming the EXACT model architecture \
+(BERT/CNN/XGBoost/VAE/transformer encoder/random forest/etc.) and the precise \
+task with key result, e.g.: 'XGBoost classifier with SHAP feature attribution \
+for cfDNA fragmentomics-based biliary tract cancer detection achieving AUC 0.94.'\
+Do NOT use generic phrases like 'machine learning-based' or 'deep learning \
+approach' — always name the specific architecture.>"
 }}"""
 
 
