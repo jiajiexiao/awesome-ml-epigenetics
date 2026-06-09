@@ -4,13 +4,14 @@ Free, no API key. Good coverage of cs.LG + q-bio preprints.
 """
 from __future__ import annotations
 
-import time
-import xml.etree.ElementTree as ET
-from typing import List
+import asyncio
+import defusedxml.ElementTree as ET
+from typing import List, Optional
 from urllib.parse import quote
 
 import httpx
 
+from ..http_client import arequest, make_async_client
 from ..schemas import CandidatePaper, PubType
 
 _BASE = "https://export.arxiv.org/api/query"
@@ -18,13 +19,17 @@ _NS = "http://www.w3.org/2005/Atom"
 _DELAY = 0.5
 
 
-def search(
+async def search(
     search_terms: List[str],
     from_date: str,
     to_date: str,
     email: str = "",
     max_per_term: int = 20,
+    client: Optional[httpx.AsyncClient] = None,
 ) -> List[CandidatePaper]:
+    own_client = client is None
+    if client is None:
+        client = make_async_client()
     papers: List[CandidatePaper] = []
     seen: set[str] = set()
 
@@ -42,11 +47,10 @@ def search(
         }
 
         try:
-            resp = httpx.get(_BASE, params=params, timeout=25)
+            resp = await arequest(client, "GET", _BASE, params=params)
             resp.raise_for_status()
             root = ET.fromstring(resp.content)
         except Exception:
-            time.sleep(2)
             continue
 
         for entry in root.findall(f"{{{_NS}}}entry"):
@@ -92,6 +96,8 @@ def search(
                 )
             )
 
-        time.sleep(_DELAY)
+        await asyncio.sleep(_DELAY)
 
+    if own_client:
+        await client.aclose()
     return papers

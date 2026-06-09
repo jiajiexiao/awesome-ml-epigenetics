@@ -4,11 +4,12 @@ Free, no API key. Date-range endpoint with local keyword filtering.
 """
 from __future__ import annotations
 
-import time
-from typing import List
+import asyncio
+from typing import List, Optional
 
 import httpx
 
+from ..http_client import arequest, make_async_client
 from ..schemas import CandidatePaper, PubType
 
 _BASE = "https://api.biorxiv.org/details"
@@ -17,15 +18,19 @@ _PAGE_SIZE = 100
 _MAX_PAGES = 3
 
 
-def search(
+async def search(
     search_terms: List[str],
     from_date: str,
     to_date: str,
     email: str = "",
     max_per_term: int = 25,
     server: str = "biorxiv",
+    client: Optional[httpx.AsyncClient] = None,
 ) -> List[CandidatePaper]:
     """Fetch papers in a date range and filter by keyword match."""
+    own_client = client is None
+    if client is None:
+        client = make_async_client()
     papers: List[CandidatePaper] = []
     seen: set[str] = set()
 
@@ -42,11 +47,10 @@ def search(
     for _ in range(_MAX_PAGES):
         url = f"{_BASE}/{server}/{from_date}/{to_date}/{cursor}/json"
         try:
-            resp = httpx.get(url, timeout=20)
+            resp = await arequest(client, "GET", url)
             resp.raise_for_status()
             data = resp.json()
         except Exception:
-            time.sleep(2)
             break
 
         collection = data.get("collection") or []
@@ -89,9 +93,13 @@ def search(
             )
 
             if len(papers) >= max_total:
+                if own_client:
+                    await client.aclose()
                 return papers
 
         cursor += len(collection)
-        time.sleep(_DELAY)
+        await asyncio.sleep(_DELAY)
 
+    if own_client:
+        await client.aclose()
     return papers

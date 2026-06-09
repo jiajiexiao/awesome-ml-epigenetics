@@ -8,8 +8,7 @@ import re
 import time
 from typing import Optional
 
-import httpx
-
+from ..http_client import request_sync
 from ..schemas import CandidatePaper, PubType
 
 _BASE = "https://api.crossref.org/works"
@@ -27,7 +26,7 @@ def lookup_doi(doi: str, email: str = "") -> Optional[CandidatePaper]:
         headers["User-Agent"] = f"AwesomeMLEpigenetics/1.0 (mailto:{email})"
 
     try:
-        resp = httpx.get(f"{_BASE}/{clean_doi}", headers=headers, timeout=15)
+        resp = request_sync("GET", f"{_BASE}/{clean_doi}", headers=headers)
         resp.raise_for_status()
         item = resp.json().get("message", {})
     except Exception:

@@ -9,6 +9,7 @@ Usage (always run from project root):
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import re
 import sys
@@ -20,6 +21,7 @@ import yaml
 from rapidfuzz import fuzz
 
 from scripts.schemas import CandidatePaper, Decision
+from scripts.http_client import make_async_client
 from scripts.review_agent import (
     _get_llm_client,
     rule_based_score,
@@ -96,22 +98,45 @@ def _best_description(paper: CandidatePaper) -> str:
 # ── Discovery ─────────────────────────────────────────────────────────────────
 
 def discover_candidates(cfg: dict, cat_cfg: dict, from_date: str, to_date: str) -> List[CandidatePaper]:
+    """Run all enabled source adapters concurrently over one pooled client."""
+    return asyncio.run(_discover_candidates_async(cfg, cat_cfg, from_date, to_date))
+
+
+async def _discover_candidates_async(
+    cfg: dict, cat_cfg: dict, from_date: str, to_date: str
+) -> List[CandidatePaper]:
     email = cfg["discovery"]["email"]
     max_raw = cfg["discovery"]["max_raw_results_per_term"]
     terms = cat_cfg["search_terms"]
     srcs = cfg.get("sources", {})
-    all_papers: List[CandidatePaper] = []
 
-    if srcs.get("openalex", True):
-        all_papers += adapters.openalex_search(terms, from_date, to_date, email, max_raw)
-    if srcs.get("europepmc", True):
-        all_papers += adapters.europepmc_search(terms, from_date, to_date, email, max_raw)
-    if srcs.get("pubmed", True):
-        all_papers += adapters.pubmed_search(terms, from_date, to_date, email, max_raw)
-    if srcs.get("arxiv", True):
-        all_papers += adapters.arxiv_search(terms, from_date, to_date, email, max_raw)
-    if srcs.get("biorxiv", True):
-        all_papers += adapters.biorxiv_search(terms, from_date, to_date, email, max_raw)
+    async with make_async_client() as client:
+        tasks = []
+        labels: List[str] = []
+        if srcs.get("openalex", True):
+            tasks.append(adapters.openalex_search(terms, from_date, to_date, email, max_raw, client=client))
+            labels.append("openalex")
+        if srcs.get("europepmc", True):
+            tasks.append(adapters.europepmc_search(terms, from_date, to_date, email, max_raw, client=client))
+            labels.append("europepmc")
+        if srcs.get("pubmed", True):
+            tasks.append(adapters.pubmed_search(terms, from_date, to_date, email, max_raw, client=client))
+            labels.append("pubmed")
+        if srcs.get("arxiv", True):
+            tasks.append(adapters.arxiv_search(terms, from_date, to_date, email, max_raw, client=client))
+            labels.append("arxiv")
+        if srcs.get("biorxiv", True):
+            tasks.append(adapters.biorxiv_search(terms, from_date, to_date, email, max_raw, client=client))
+            labels.append("biorxiv")
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    all_papers: List[CandidatePaper] = []
+    for label, result in zip(labels, results):
+        if isinstance(result, BaseException):
+            print(f"[discover] {label} failed: {result}")
+            continue
+        all_papers += result
 
     return all_papers
 

@@ -4,12 +4,14 @@ Free, no API key. Rate limit: 3 req/s without key.
 """
 from __future__ import annotations
 
-import time
-import xml.etree.ElementTree as ET
-from typing import List
+import asyncio
+import defusedxml.ElementTree as ET
+from typing import List, Optional
 
 import httpx
+from xml.etree.ElementTree import Element
 
+from ..http_client import arequest, make_async_client
 from ..schemas import CandidatePaper, PubType
 
 _ESEARCH = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
@@ -17,13 +19,17 @@ _EFETCH = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
 _DELAY = 0.4  # stay under 3 req/s
 
 
-def search(
+async def search(
     search_terms: List[str],
     from_date: str,
     to_date: str,
     email: str = "",
     max_per_term: int = 20,
+    client: Optional[httpx.AsyncClient] = None,
 ) -> List[CandidatePaper]:
+    own_client = client is None
+    if client is None:
+        client = make_async_client()
     papers: List[CandidatePaper] = []
     seen: set[str] = set()
     from_y, to_y = from_date[:4], to_date[:4]
@@ -41,21 +47,22 @@ def search(
             esearch_params["email"] = email
 
         try:
-            resp = httpx.get(_ESEARCH, params=esearch_params, timeout=20)
+            resp = await arequest(client, "GET", _ESEARCH, params=esearch_params)
             resp.raise_for_status()
             id_list = resp.json().get("esearchresult", {}).get("idlist", [])
         except Exception:
-            time.sleep(2)
             continue
 
         if not id_list:
-            time.sleep(_DELAY)
+            await asyncio.sleep(_DELAY)
             continue
 
-        time.sleep(_DELAY)
+        await asyncio.sleep(_DELAY)
 
         try:
-            fetch_resp = httpx.post(
+            fetch_resp = await arequest(
+                client,
+                "POST",
                 _EFETCH,
                 data={
                     "db": "pubmed",
@@ -63,12 +70,10 @@ def search(
                     "retmode": "xml",
                     "rettype": "abstract",
                 },
-                timeout=30,
             )
             fetch_resp.raise_for_status()
             root = ET.fromstring(fetch_resp.content)
         except Exception:
-            time.sleep(2)
             continue
 
         for article in root.findall(".//PubmedArticle"):
@@ -130,12 +135,14 @@ def search(
                 )
             )
 
-        time.sleep(_DELAY)
+        await asyncio.sleep(_DELAY)
 
+    if own_client:
+        await client.aclose()
     return papers
 
 
-def _inner_text(el: ET.Element | None) -> str:
+def _inner_text(el: "Element | None") -> str:
     if el is None:
         return ""
     return (el.text or "") + "".join(
