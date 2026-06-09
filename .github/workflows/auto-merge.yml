@@ -6,7 +6,7 @@ on:
     types: [completed]
 
 # Privileged — uses PR_PAT to merge.
-# Only runs for auto-update branches from this repo.
+# Runs for the bi-weekly auto-update branches and issue-sourced suggestion PRs.
 permissions:
   contents: write
   pull-requests: write
@@ -17,7 +17,10 @@ jobs:
     if: |
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'pull_request' &&
-      startsWith(github.event.workflow_run.head_branch, 'auto-update/papers-') &&
+      (
+        startsWith(github.event.workflow_run.head_branch, 'auto-update/papers-') ||
+        startsWith(github.event.workflow_run.head_branch, 'issue-suggestion/')
+      ) &&
       github.event.workflow_run.repository.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -72,16 +75,19 @@ jobs:
               return;
             }
 
-            // 2. Strict branch pattern: auto-update/papers-<run_id>-<slug>
-            if (!/^auto-update\/papers-\d+-[\w-]+$/.test(headBranch)) {
+            // 2. Strict branch pattern: auto-update/papers-<run_id>-<slug> OR issue-suggestion/<n>
+            const okBranch =
+              /^auto-update\/papers-\d+-[\w-]+$/.test(headBranch) ||
+              /^issue-suggestion\/\d+$/.test(headBranch);
+            if (!okBranch) {
               core.setFailed(`TRUST FAIL: branch '${headBranch}' does not match expected pattern`);
               return;
             }
 
-            // 3. Has 'auto-update' label
+            // 3. Has an approved automation label ('auto-update' or 'from-issue')
             const labels = pr.labels.map(l => l.name);
-            if (!labels.includes('auto-update')) {
-              core.setFailed('TRUST FAIL: missing auto-update label');
+            if (!labels.includes('auto-update') && !labels.includes('from-issue')) {
+              core.setFailed('TRUST FAIL: missing auto-update / from-issue label');
               return;
             }
 
@@ -143,7 +149,7 @@ jobs:
             console.log(`PR #${prNum} merged.`);
 
       - name: Create release
-        if: steps.trust.outputs.verified == 'true'
+        if: steps.trust.outputs.verified == 'true' && startsWith(github.event.workflow_run.head_branch, 'auto-update/papers-')
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.PR_PAT }}

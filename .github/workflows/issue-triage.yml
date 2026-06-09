@@ -6,11 +6,12 @@ on:
   issue_comment:
     types: [created, edited]
 
-# Needs to push a branch, open PRs, and comment on the issue
+# Needs to push a branch, open PRs, comment on the issue, and call GitHub Models
 permissions:
   contents: write
   issues: write
   pull-requests: write
+  models: read
 
 jobs:
   triage:

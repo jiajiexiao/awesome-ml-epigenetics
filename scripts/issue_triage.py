@@ -100,10 +100,11 @@ def classify_category(text: str, cfg: dict, fallback_display: str = "") -> tuple
     return "", "", 0
 
 
-def _suggest_description(title: str, client, model: str) -> str:
+def _suggest_description(title: str, client, model: str, context: str = "") -> str:
     """Generate a one-sentence description naming the model/architecture."""
     if not client:
         return ""
+    ctx = f"\nAuthor notes/hints: {context.strip()}" if context.strip() else ""
     try:
         from scripts.review_agent import _llm_call
         raw = _llm_call(
@@ -117,7 +118,7 @@ def _suggest_description(title: str, client, model: str) -> str:
                     "'machine learning-based' or 'deep learning approach'."
                 )},
                 {"role": "user", "content": (
-                    f"Title: {title}\nWrite ONE concise sentence (<=30 words) "
+                    f"Title: {title}{ctx}\nWrite ONE concise sentence (<=30 words) "
                     "describing the method and task. No trailing period."
                 )},
             ],
@@ -346,7 +347,7 @@ def main() -> None:
                 f"{s.title} {notes}", cfg, fallback_display=user_category
             )
             s.marker, s.category_display = marker, display
-            s.description = _suggest_description(s.title, client, model)
+            s.description = _suggest_description(s.title, client, model, notes)
 
     # Items eligible to be auto-added: resolved, not duplicate, have year + category
     to_add = [

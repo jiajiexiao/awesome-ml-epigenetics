@@ -47,9 +47,11 @@ jobs:
         run: uv run python -m scripts.ci_checks --check README.md
         continue-on-error: true
 
-      - name: Run LLM grounded review (auto-update PRs only)
+      - name: Run LLM grounded review (auto-update & issue PRs)
         id: llm
-        if: contains(github.event.pull_request.labels.*.name, 'auto-update')
+        if: >
+          contains(github.event.pull_request.labels.*.name, 'auto-update') ||
+          contains(github.event.pull_request.labels.*.name, 'from-issue')
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PYTHONPATH: ${{ github.workspace }}
@@ -79,7 +81,7 @@ jobs:
               `| LLM grounded review | ${llmLabel} |`,
               '',
               allPass
-                ? '_All checks passed. Auto-merge will trigger if this is a trusted auto-update PR._'
+                ? '_All checks passed. Auto-merge will trigger for trusted auto-update or issue-suggestion PRs._'
                 : '_One or more checks failed. Review the details above before merging._',
             ].join('\n');
 
