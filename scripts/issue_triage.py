@@ -21,6 +21,7 @@ from typing import List, Optional
 
 import httpx
 from rapidfuzz import fuzz
+from bs4 import BeautifulSoup
 
 ROOT = Path(__file__).parent.parent
 
@@ -124,6 +125,35 @@ def _resolve_from_title(title: str, email: str) -> tuple[str, str, int, float]:
     return (best.get("display_name") or "").strip(), url, year, best_score
 
 
+def _resolve_from_openreview(url: str) -> tuple[str, int]:
+    """Best-effort metadata extraction for OpenReview forum pages."""
+    r = httpx.get(url, timeout=15)
+    if r.status_code >= 400:
+        return "", 0
+
+    soup = BeautifulSoup(r.text, "html.parser")
+
+    title = ""
+    og = soup.find("meta", attrs={"property": "og:title"})
+    if og and og.get("content"):
+        title = og.get("content", "").strip()
+
+    if not title and soup.title and soup.title.string:
+        title = soup.title.string.strip()
+
+    # Clean common suffixes
+    title = re.sub(r"\s*\|\s*OpenReview\s*$", "", title).strip()
+
+    # Try to infer year from visible page text
+    text = soup.get_text(" ", strip=True)
+    year = 0
+    ym = re.search(r"\b(20\d{2})\b", text)
+    if ym:
+        year = int(ym.group(1))
+
+    return title, year
+
+
 def _is_url_item(text: str) -> bool:
     return bool(_URL_RE.search(text) or _DOI_RE.search(text))
 
@@ -176,6 +206,10 @@ def main() -> None:
                     t, y = _resolve_from_doi(s.url, email)
                     s.title, s.year = t, y
                     s.source = "crossref"
+                elif "openreview.net/forum" in s.url.lower():
+                    t, y = _resolve_from_openreview(s.url)
+                    s.title, s.year = t, y
+                    s.source = "openreview"
                 else:
                     # Non-DOI URL: best-effort title from URL slug
                     s.title = re.sub(r"[-_]+", " ", s.url.rsplit("/", 1)[-1]).strip()[:160]
