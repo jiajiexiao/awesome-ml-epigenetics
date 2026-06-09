@@ -25,6 +25,7 @@ A curated list of "awesome" machine learning resources, datasets, and papers in 
 - [A nonparametric Bayesian approach for clustering bisulfate-based DNA methylation profiles](https://link.springer.com/article/10.1186/1471-2164-13-S6-S20) (2012) - Bayesian stats model for clustering/segment microarray data. 
 
 <!-- AUTO-PAPERS:DNA_METHYLATION START -->
+- [Methylation-Aware Embedding Geometry Emerges from Bisulfite...](https://openreview.net/forum?id=C4lGPSE0X7) (2026) - A transformer encoder is utilized to learn methylation-aware embeddings for predicting gene expression from bisulfite sequencing data.
 <!-- AUTO-PAPERS:DNA_METHYLATION END -->
 
 ### Histone Modifications
@@ -75,6 +76,7 @@ A curated list of "awesome" machine learning resources, datasets, and papers in 
 <!-- AUTO-PAPERS:LIQUID_BIOPSY START -->
 - [Noninvasive detection and prognostic stratification of biliary tract cancer using cell-free DNA fragmentomics: a model development and validation study](https://doi.org/10.1186/s43556-026-00468-7) (2026) - Ensemble machine-learning model integrating copy number variation, fragment size distribution, and promoter fragmentation entropy for cfDNA fragmentomics-based biliary tract cancer detection achieving AUC 0.
 - [Epigenetic Instability-Based Metrics in Cell-Free DNA for Early Cancer Detection.](https://doi.org/10.1158/1078-0432.CCR-25-3384) (2026) - Random forest classifier using the epigenetic instability index (EII) for cfDNA-based early cancer detection, achieving 81% sensitivity at 95% specificity for stage IA lung adenocarcinoma.
+- [Learning Extremely Sparse Signals in High-Dimensional Cell-Free DNA...](https://openreview.net/forum?id=tCYH1EdShW) (2026) - A VAE is employed to reconstruct extremely sparse signals from high-dimensional cell-free DNA data for improved detection of genetic alterations.
 <!-- AUTO-PAPERS:LIQUID_BIOPSY END -->
 
 ### Novel Epigenetic Assays
