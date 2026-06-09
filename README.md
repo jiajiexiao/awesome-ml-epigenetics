@@ -107,6 +107,19 @@ A curated list of "awesome" machine learning resources, datasets, and papers in 
 
 Your contributions are always welcome!
 
+### Suggest a paper via an issue (easiest)
+
+No git or pull request needed — just [open a Paper Suggestion issue](../../issues/new?template=paper_suggestion.yml) and paste one or more URLs or titles (DOIs, journal/arXiv/bioRxiv links, or OpenReview forum URLs). On submit, the bot will:
+
+1. Resolve each paper's title, year, and **abstract** from public APIs (OpenAlex, Crossref, OpenReview)
+2. Auto-assign a category and write a one-sentence description **grounded in the abstract**
+3. Validate links and check for duplicates
+4. Open a pull request that **closes your issue when it merges**
+
+The PR runs the same review-gate checks and **auto-merges once they pass** — a maintainer only steps in if a check fails. Category is optional: pick one from the dropdown or leave it as **Unsure** and the bot will infer it (papers it still can't categorize are left out of the PR until you add a hint).
+
+To re-run the bot after editing your issue, comment **`/triage`** (optionally followed by more URLs/titles); it updates the same pull request.
+
 ### Automated updates
 
 New papers are discovered and proposed automatically twice a month via a GitHub Actions pipeline. The bot searches OpenAlex, Europe PMC, PubMed, arXiv, and bioRxiv, then screens candidates through rule-based scoring and a two-stage LLM review before opening a pull request. Each section contains a bot-owned sub-block between `<!-- AUTO-PAPERS:… START -->` and `<!-- AUTO-PAPERS:… END -->` comments — do not edit lines inside those markers by hand.

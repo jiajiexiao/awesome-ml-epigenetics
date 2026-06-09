@@ -46,11 +46,19 @@ This document describes the architecture of the automated paper-discovery pipeli
 │  (deterministic    │        │  (squash merge)     │
 │   + LLM grounded)  │        └────────────────────┘
 └────────────────────┘
+        ▲
+        │ PR opened (Closes #N)
+┌────────────────────┐
+│  issue-triage.yml  │  ◀── user files a "Paper Suggestion" issue
+│  (resolve + class- │      (label: paper-suggestion, or comment /triage)
+│   ify + ground)    │
+└────────────────────┘
 ```
 
 **Key design decisions:**
 
 - **No personal API keys.** All publication APIs (OpenAlex, Europe PMC, PubMed, arXiv, bioRxiv) are free and keyless. The LLM uses GitHub Models via the built-in `GITHUB_TOKEN` (`permissions: models: read`).
+- **Two ways in.** Papers enter either via the scheduled discovery run *or* via user-submitted **Paper Suggestion** issues (`issue-triage.yml`); both converge on the same review-gate → auto-merge path.
 - **Two-stage screening.** Stage-1 is a fast abstract-level LLM verdict. Stage-2 is a deeper review of the OA full text — only papers that pass Stage-1 and have a freely accessible version proceed.
 - **Ensemble voting.** A paper must pass *both* the rule-based scorer and the Stage-1 LLM to avoid false positives.
 - **Sharding.** One category per workflow run to stay well inside the free GitHub Models quota (~150 low-tier requests/day).
@@ -74,6 +82,7 @@ This document describes the architecture of the automated paper-discovery pipeli
 │   ├── fulltext.py             ← Open-access full-text fetcher
 │   ├── update_list.py          ← Main CLI orchestrator
 │   ├── ci_checks.py            ← CI entry point (review-gate)
+│   ├── issue_triage.py         ← Resolve/classify paper-suggestion issues → PR
 │   └── adapters/
 │       ├── __init__.py
 │       ├── openalex.py
@@ -83,8 +92,11 @@ This document describes the architecture of the automated paper-discovery pipeli
 │       ├── biorxiv.py
 │       └── crossref.py         ← DOI enrichment only (not primary discovery)
 └── .github/
+    ├── ISSUE_TEMPLATE/
+    │   └── paper_suggestion.yml ← Issue form for paper suggestions
     └── workflows/
         ├── propose-update.yml  ← Scheduled discovery → PR
+        ├── issue-triage.yml    ← Suggestion issue → PR
         ├── review-gate.yml     ← CI checks on PR
         └── auto-merge.yml      ← Merge after gate passes
 ```
@@ -295,13 +307,26 @@ update_list.py  process_category()
   - `dry_run` — print proposals without writing files or opening a PR
 - **Artifact:** `candidates.json` is uploaded for every run (14-day retention) — useful for debugging which papers were seen
 
+### `issue-triage.yml` — paper suggestions from issues → PR
+
+- **Triggers:** `issues` (opened/edited) and `issue_comment` (created/edited) on issues labeled `paper-suggestion`
+- On a **comment**, the bot only runs if the comment contains **`/triage`** (ordinary discussion is ignored); opening or editing the issue runs it automatically
+- Steps:
+  1. `scripts/issue_triage.py` resolves each pasted URL/title via OpenAlex, Crossref, and the OpenReview API → title, year, **abstract**
+  2. Auto-assigns a category (keyword match → user dropdown → `Unsure`) and writes an **abstract-grounded** description
+  3. Validates links, checks duplicates, and injects ready entries into `README.md`
+  4. Opens a PR via `secrets.PR_PAT` on a deterministic `issue-suggestion/<n>` branch (re-running `/triage` updates the same PR) whose body contains `Closes #<n>`
+  5. Replies on the issue with the PR link
+- **Permissions:** `contents: write`, `issues: write`, `pull-requests: write`, `models: read`
+- The PR carries the `from-issue` label, so it flows through the same review-gate and auto-merge path as scheduled updates — and closes the originating issue on merge
+
 ### `review-gate.yml` — CI on PRs touching README
 
 - Runs on every PR that modifies `README.md`
 - **Unprivileged** — only `contents: read`, `pull-requests: write`, `models: read`
 - Steps:
   1. Deterministic checks (`--check`): format lint, dedup against `origin/main`, link reachability (HEAD request)
-  2. LLM grounded review (`--llm-review`): only on PRs with the `auto-update` label; verifies each new entry is genuinely relevant — exits `1` if the LLM is unavailable (keeps PR open rather than auto-merging unreviewed)
+  2. LLM grounded review (`--llm-review`): on PRs labeled `auto-update` **or** `from-issue`; verifies each new entry is genuinely relevant — exits `1` if the LLM is unavailable (keeps PR open rather than auto-merging unreviewed)
   3. Posts a summary comment on the PR
 
 ### `auto-merge.yml` — privileged merge after gate passes
@@ -309,14 +334,14 @@ update_list.py  process_category()
 Fires as a `workflow_run` event after `review-gate` completes. Before merging it verifies **all seven** trust conditions:
 
 1. Same repository (not a fork)
-2. Branch matches `auto-update/papers-<run_id>-<slug>`
-3. PR has `auto-update` label
+2. Branch matches `auto-update/papers-<run_id>-<slug>` **or** `issue-suggestion/<issue>`
+3. PR has the `auto-update` **or** `from-issue` label
 4. PR does **not** have `needs-human-review` label
 5. HEAD SHA matches (review ran on current HEAD, not a stale commit)
 6. Changed files limited to `README.md`
 7. All required check runs succeeded
 
-Uses `secrets.PR_PAT` (a fine-grained PAT) throughout; the standard `GITHUB_TOKEN` cannot trigger further workflow runs.
+Uses `secrets.PR_PAT` (a fine-grained PAT) throughout; the standard `GITHUB_TOKEN` cannot trigger further workflow runs. A GitHub release is cut only for the scheduled `auto-update/papers-*` batches, not for issue-sourced PRs.
 
 ---
 
@@ -350,6 +375,17 @@ Add the token as a repository secret named `PR_PAT`:
 ### d) (Optional) Update the discovery email
 
 In `config.yml` set `discovery.email` to a real address. OpenAlex and Unpaywall use this for the polite pool (higher rate limits); it is never used for anything else.
+
+### e) Enable issue-based suggestions
+
+The `issue-triage.yml` workflow turns **Paper Suggestion** issues into PRs. Make sure:
+
+- **Issues are enabled** (Repository → Settings → General → Features → Issues ✓)
+- The **`paper-suggestion`** label exists — `issue-triage.yml` only runs on issues carrying it. The issue form (`.github/ISSUE_TEMPLATE/paper_suggestion.yml`) applies it automatically; create it once with:
+  ```bash
+  gh label create paper-suggestion --description "Paper suggestion for the awesome list"
+  ```
+- `PR_PAT` is configured (step **a**) — it is reused to open the suggestion PR and reply on the issue.
 
 ---
 
