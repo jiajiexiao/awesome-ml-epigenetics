@@ -50,6 +50,7 @@ A curated list of "awesome" machine learning resources, datasets, and papers in 
 - [MOFA+: A probabilistic framework for comprehensive integration of structured single-cell data](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-020-02015-1) (2020) - Framework for integrating multiple omics data types.
 
 <!-- AUTO-PAPERS:MULTI_OMICS START -->
+- [BioReason: Incentivizing Multimodal Biological Reasoning within a DNA-LLM Model](https://arxiv.org/abs/2505.23579) (2025) - BioReason integrates a DNA foundation model with a large language model to enhance biological reasoning, achieving 98% accuracy in KEGG-based disease pathway prediction and improving variant effect prediction by 15%.
 <!-- AUTO-PAPERS:MULTI_OMICS END -->
 
 ### Liquid Biopsy
