@@ -169,10 +169,25 @@ def render_entry(paper: CandidatePaper) -> str:
     return f"- [{paper.title}]({paper.url}) ({paper.year}) - {desc}."
 
 
+def _first_sentence(text: str) -> str:
+    """Return the first sentence of ``text``.
+
+    Only a period followed by whitespace or the end of the string counts as a
+    sentence boundary. A decimal metric's inner period (e.g. ``AUC 0.94``,
+    ``MAE 1.5``) is followed by a digit, so it is never treated as a boundary
+    and values are no longer truncated to ``AUC 0`` / ``MAE 1``.
+    """
+    text = text.strip()
+    m = re.search(r"\.(?=\s|$)", text)
+    if m:
+        return text[: m.start()].strip()
+    return text.rstrip(".").strip()
+
+
 def _best_description(paper: CandidatePaper) -> str:
     for candidate in [paper.markdown_entry, paper.deep_review_rationale, paper.reviewer_rationale]:
         if candidate and len(candidate.strip()) > 10:
-            first = candidate.strip().split(".")[0].strip().rstrip(".")
+            first = _first_sentence(candidate)
             if len(first) > 10:
                 return first
     return f"{paper.pub_type.value.capitalize()} paper"
