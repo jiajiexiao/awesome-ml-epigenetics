@@ -43,6 +43,8 @@ A curated list of "awesome" machine learning resources, datasets, and papers in 
 - [cisTopic: cis-regulatory topic modeling on single-cell ATAC-seq data](https://www.nature.com/articles/s41592-019-0367-1) (2019) - A probabilistic framework used to simultaneously discover coaccessible enhancers and stable cell states from sparse single-cell epigenomics data.
 
 <!-- AUTO-PAPERS:CHROMATIN_ACCESSIBILITY START -->
+- [Evaluating single-cell ATAC-seq atlasing technologies using sequence-to-function modeling.](https://doi.org/10.1038/s41586-023-06819-6) (2026) - Random forest model for predicting candidate cis-regulatory elements based on sequence data, achieving high predictive accuracy across mammalian species.
+- [Cross-species prediction reveals chromatin regions with increased accessibility in humans](https://doi.org/10.1126/sciadv.ady9169) (2026) - CNN-based model for cross-species prediction of chromatin accessibility, identifying 23,414 human predicted increased chromatin accessibility regions (hPICAs) across 111 cell types.
 <!-- AUTO-PAPERS:CHROMATIN_ACCESSIBILITY END -->
 
 ### Multi-omics Integration
