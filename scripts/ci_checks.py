@@ -15,6 +15,7 @@ import os
 import re
 import subprocess
 import sys
+from datetime import date
 from pathlib import Path
 from typing import List, Tuple
 
@@ -166,17 +167,21 @@ def _get_base_readme() -> str:
 
 # ── LLM review ────────────────────────────────────────────────────────────────
 
+_TODAY = date.today()
+
 _LLM_REVIEW_SYSTEM = (
-    "You are a strict scientific curator reviewing new entries proposed for an "
-    "'awesome' list of ML in epigenetics. Evaluate each entry for relevance, "
-    "accuracy, and format. Respond in strict JSON. "
-    "Do NOT penalize an entry for its publication year: recent or current-year "
-    "papers (including preprints dated this year or next) are expected and "
-    "welcome. Never treat a year as a 'future' or 'invalid' date."
+    f"You are a strict scientific curator reviewing new entries proposed for an "
+    f"'awesome' list of ML in epigenetics. Today's date is {_TODAY.isoformat()} "
+    f"(current year: {_TODAY.year}). Evaluate each entry for relevance, accuracy, "
+    f"and format only. Respond in strict JSON. "
+    f"Publication year is OUT OF SCOPE for your review: papers dated {_TODAY.year} "
+    f"or {_TODAY.year + 1} are current and expected, and earlier years are fine too. "
+    f"A year is NEVER 'future', 'invalid', or a reason to reject — ignore it entirely."
 )
 
 _LLM_REVIEW_USER = """\
 Review these proposed new entries for the awesome-ml-epigenetics list.
+Today is {today}. Treat any year up to and including {next_year} as valid.
 
 Entries:
 {entries}
@@ -186,9 +191,10 @@ For each entry, check:
 2. Is the description concise and technically accurate based on the title alone?
 3. Are there any red flags (irrelevant, wrong category, duplicate concept)?
 
-Judge relevance and accuracy ONLY. The publication year is never a red flag —
-do not comment on, question, or reject an entry because of a recent, current, or
-seemingly future publication date.
+Judge relevance and accuracy ONLY. The publication year is NEVER a red flag and
+must be ignored: do not comment on, question, or reject an entry because of a
+recent, current, or seemingly future publication date (e.g. {this_year} or
+{next_year} are perfectly valid).
 
 Respond with ONLY this JSON:
 {{
@@ -217,7 +223,12 @@ def run_llm_review(readme_path: Path) -> Tuple[bool, List[str]]:
         return False, ["LLM review required but GitHub Models unavailable"]
 
     entries_block = "\n".join(new_entries)
-    prompt = _LLM_REVIEW_USER.format(entries=entries_block)
+    prompt = _LLM_REVIEW_USER.format(
+        entries=entries_block,
+        today=_TODAY.isoformat(),
+        this_year=_TODAY.year,
+        next_year=_TODAY.year + 1,
+    )
 
     import os
     cfg_model = "gpt-4o-mini"
