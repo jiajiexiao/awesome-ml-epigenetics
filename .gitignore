@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# uv — commit uv.lock, ignore the local venv
+.venv/
+
+# Pipeline artefacts
+candidates.json
+*.log
+
+# macOS
+.DS_Store

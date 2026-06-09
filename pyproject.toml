@@ -1,0 +1,26 @@
+[project]
+name = "awesome-ml-epigenetics"
+version = "0.1.0"
+description = "Self-updating curated list of ML in epigenetics papers"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.27.0",
+    "pyyaml>=6.0.1",
+    "rapidfuzz>=3.9.0",
+    "openai>=1.30.0",
+    "lxml>=5.2.0",
+    "beautifulsoup4>=4.12.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-httpx>=0.30.0",
+]
+
+[tool.uv]
+package = false          # no wheel needed; this is a scripts-only project
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

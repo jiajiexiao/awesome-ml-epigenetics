@@ -1,0 +1,208 @@
+# Configuration for the automated paper discovery pipeline
+
+discovery:
+  # Email used for polite-pool access (OpenAlex, Unpaywall) — no key needed, just for rate limit
+  email: "auto-update@users.noreply.github.com"
+  # How many days back to look for new papers
+  date_window_days: 90
+  # Max raw results to retrieve per search term per source (before filtering)
+  max_raw_results_per_term: 25
+
+sources:
+  openalex: true
+  europepmc: true
+  pubmed: true
+  arxiv: true
+  biorxiv: true
+  # crossref is used only for DOI normalization/dedup, not primary discovery
+  crossref: false
+
+categories:
+  dna_methylation:
+    slug: dna-methylation
+    readme_marker: DNA_METHYLATION
+    search_terms:
+      - "DNA methylation machine learning"
+      - "DNA methylation deep learning"
+      - "CpG methylation prediction neural network"
+      - "bisulfite sequencing deep learning"
+      - "methylome transformer foundation model"
+    keywords:
+      - methylation
+      - CpG
+      - bisulfite
+      - methylome
+      - WGBS
+      - RRBS
+      - EPIC
+      - 450K
+      - DMR
+      - differentially methylated
+    max_new_per_run: 5
+    relevance_threshold: 0.65
+    preprint_threshold: 0.80
+
+  histone_modifications:
+    slug: histone-modifications
+    readme_marker: HISTONE_MODIFICATIONS
+    search_terms:
+      - "histone modification deep learning"
+      - "histone modification machine learning"
+      - "chromatin mark prediction neural network"
+      - "ChIP-seq deep learning"
+    keywords:
+      - histone
+      - H3K4
+      - H3K27
+      - H3K36
+      - H3K9
+      - chromatin mark
+      - ChIP-seq
+      - histone modification
+    max_new_per_run: 5
+    relevance_threshold: 0.65
+    preprint_threshold: 0.80
+
+  chromatin_accessibility:
+    slug: chromatin-accessibility
+    readme_marker: CHROMATIN_ACCESSIBILITY
+    search_terms:
+      - "chromatin accessibility machine learning"
+      - "ATAC-seq deep learning"
+      - "chromatin interaction prediction neural network"
+      - "enhancer prediction deep learning"
+      - "3D chromatin deep learning"
+    keywords:
+      - ATAC-seq
+      - chromatin accessibility
+      - open chromatin
+      - DNase-seq
+      - enhancer
+      - 3D chromatin
+      - TAD
+      - Hi-C
+      - scATAC
+    max_new_per_run: 5
+    relevance_threshold: 0.65
+    preprint_threshold: 0.80
+
+  multi_omics:
+    slug: multi-omics
+    readme_marker: MULTI_OMICS
+    search_terms:
+      - "multi-omics integration deep learning epigenetics"
+      - "single-cell epigenomics machine learning"
+      - "gene regulatory network machine learning"
+      - "scRNA-seq scATAC-seq integration deep learning"
+    keywords:
+      - multi-omics
+      - scATAC
+      - scRNA
+      - multiome
+      - regulatory network
+      - single-cell epigenomics
+      - SCENIC
+      - MOFA
+      - joint embedding
+    max_new_per_run: 5
+    relevance_threshold: 0.65
+    preprint_threshold: 0.80
+
+  liquid_biopsy:
+    slug: liquid-biopsy
+    readme_marker: LIQUID_BIOPSY
+    search_terms:
+      - "cell-free DNA machine learning methylation"
+      - "cfDNA deep learning cancer detection"
+      - "liquid biopsy epigenetics neural network"
+      - "circulating tumor DNA machine learning"
+      - "plasma DNA methylation deep learning"
+    keywords:
+      - cell-free DNA
+      - cfDNA
+      - liquid biopsy
+      - ctDNA
+      - plasma DNA
+      - circulating DNA
+      - cancer detection
+      - end-motif
+      - fragment size
+      - tissue deconvolution
+    max_new_per_run: 5
+    relevance_threshold: 0.65
+    preprint_threshold: 0.80
+
+  novel_assays:
+    slug: novel-assays
+    readme_marker: NOVEL_ASSAYS
+    search_terms:
+      - "novel epigenetic sequencing method machine learning"
+      - "DNA methylation assay new technology"
+      - "TAPS sequencing epigenetics"
+      - "single-cell epigenetic sequencing multimodal"
+    keywords:
+      - TAPS
+      - EM-seq
+      - enzymatic methyl-seq
+      - CUT&RUN
+      - CUT&TAG
+      - scNMT
+      - novel assay
+      - epigenetic profiling
+      - multimodal sequencing
+    max_new_per_run: 3
+    relevance_threshold: 0.70
+    preprint_threshold: 0.85
+
+  datasets:
+    slug: datasets
+    readme_marker: DATASETS
+    search_terms:
+      - "epigenomics database resource methylation benchmark"
+      - "epigenetics atlas multi-tissue dataset"
+    keywords:
+      - database
+      - atlas
+      - benchmark
+      - resource
+      - repository
+      - ENCODE
+      - epigenomics
+    max_new_per_run: 2
+    relevance_threshold: 0.75
+    preprint_threshold: 0.90
+
+quality:
+  # Global minimum relevance score (per-category settings override this)
+  min_relevance_score: 0.60
+  # Require both rule-based AND LLM to agree for auto-include (2-voter rule)
+  ensemble_agreement_required: true
+
+llm:
+  # GitHub Models — uses GITHUB_TOKEN, no personal key needed
+  model: "gpt-4o-mini"
+  # Max candidates sent to LLM for Stage-1 abstract screening per run
+  max_llm_candidates_per_run: 30
+  # Max papers sent for Stage-2 full-text deep review per day
+  max_deep_reviews_per_day: 6
+  # Max LLM calls per paper for deep review (section extraction + judgement)
+  max_calls_per_paper: 4
+  # Enable full-text deep review (Stage 2) — requires OA full text
+  deep_review_enabled: true
+  # Try to find a free/preprint version of paywalled papers before giving up
+  oa_version_discovery: true
+  # Abstract token budget per prompt (rough chars = tokens * 4)
+  max_abstract_tokens: 800
+  # Section snippet token budget for deep review
+  max_section_tokens: 1500
+
+sharding:
+  # Process one category per workflow run to stay within daily LLM quota
+  strategy: "single"
+  # Maximum open auto-update PRs at any time (prevents PR spam)
+  max_open_auto_prs: 4
+
+pr:
+  auto_update_label: "auto-update"
+  needs_human_review_label: "needs-human-review"
+  base_branch: "main"

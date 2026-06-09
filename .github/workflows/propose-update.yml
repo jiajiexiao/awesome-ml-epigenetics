@@ -1,0 +1,121 @@
+name: Propose paper updates
+
+on:
+  schedule:
+    # Bi-weekly: 1st and 15th of each month at 06:00 UTC
+    - cron: '0 6 1,15 * *'
+  workflow_dispatch:
+    inputs:
+      category:
+        description: 'Category slug (e.g. dna-methylation). Leave empty for auto-select.'
+        required: false
+        default: ''
+      dry_run:
+        description: 'Dry run — print proposals without opening a PR'
+        type: boolean
+        default: false
+
+# Minimal permissions — PR_PAT is used only for the PR-creation step
+permissions:
+  contents: read
+  models: read
+
+jobs:
+  propose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Select category shard
+        id: shard
+        run: |
+          CATEGORIES=(dna-methylation histone-modifications chromatin-accessibility multi-omics liquid-biopsy novel-assays datasets)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.category }}" ]; then
+            CAT="${{ inputs.category }}"
+          else
+            # Scheduled or dispatch without explicit category:
+            # cycle through categories by day-of-month (1 → idx 0, 15 → idx 1, …)
+            DOM=$(date +%-d)
+            IDX=$(( (DOM <= 14 ? 0 : 1) % ${#CATEGORIES[@]} ))
+            CAT="${CATEGORIES[$IDX]}"
+          fi
+          echo "category=$CAT" >> "$GITHUB_OUTPUT"
+          echo "branch=auto-update/papers-${{ github.run_id }}-$CAT" >> "$GITHUB_OUTPUT"
+
+      - name: Run pipeline
+        id: pipeline
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          DRY=""
+          [ "${{ inputs.dry_run }}" = "true" ] && DRY="--dry-run"
+          uv run python -m scripts.update_list --category "${{ steps.shard.outputs.category }}" $DRY
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+        continue-on-error: true
+
+      - name: Upload candidates artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: candidates-${{ github.run_id }}-${{ steps.shard.outputs.category }}
+          path: candidates.json
+          retention-days: 14
+
+      - name: Check for README changes
+        id: changes
+        if: steps.pipeline.outputs.exit_code == '0'
+        run: |
+          git diff --quiet README.md && echo "has_changes=false" >> "$GITHUB_OUTPUT" \
+                                     || echo "has_changes=true"  >> "$GITHUB_OUTPUT"
+
+      - name: Create pull request
+        if: |
+          steps.changes.outputs.has_changes == 'true' &&
+          inputs.dry_run != 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.PR_PAT }}
+          commit-message: "chore: auto-update papers [${{ steps.shard.outputs.category }}] run-${{ github.run_id }}"
+          branch: ${{ steps.shard.outputs.branch }}
+          title: "[Auto-update] New papers: ${{ steps.shard.outputs.category }}"
+          body: |
+            ## Automated paper discovery
+
+            | Field | Value |
+            |---|---|
+            | **Category** | `${{ steps.shard.outputs.category }}` |
+            | **Run ID** | `${{ github.run_id }}` |
+            | **Date window** | last 90 days |
+
+            Papers were included only after passing:
+            1. Rule-based keyword screening
+            2. LLM Stage-1 abstract review (both voters must agree)
+            3. LLM Stage-2 full-text deep review (OA papers only)
+
+            Paywalled papers with no free version are **not** in this PR — they appear in the
+            [candidates artifact](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            labelled `needs-human-review`.
+
+            > The **review-gate** CI check must pass before auto-merge is triggered.
+          labels: auto-update
+          delete-branch: true
+
+      - name: Notify needs-human-review items
+        if: steps.pipeline.outputs.exit_code == '2'
+        run: |
+          echo "::notice::Some papers passed Stage-1 but could not be auto-reviewed (no OA full text). Check the candidates artifact."

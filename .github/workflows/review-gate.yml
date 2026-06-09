@@ -1,0 +1,103 @@
+name: Review gate
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'README.md'
+
+# UNPRIVILEGED: no PR_PAT, no merge rights.
+# This job only reads and reports — it does not modify the repo.
+permissions:
+  contents: read
+  pull-requests: write
+  models: read
+  statuses: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout PR head (static analysis only — never execute PR code)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Fetch base branch for dedup baseline
+        run: git fetch origin main
+
+      - name: Run deterministic checks (format / dedup / link reachability)
+        id: det
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: uv run python -m scripts.ci_checks --check README.md
+        continue-on-error: true
+
+      - name: Run LLM grounded review (auto-update PRs only)
+        id: llm
+        if: contains(github.event.pull_request.labels.*.name, 'auto-update')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PYTHONPATH: ${{ github.workspace }}
+        run: uv run python -m scripts.ci_checks --llm-review README.md
+        continue-on-error: true
+
+      - name: Post review summary comment
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const detPass = '${{ steps.det.outcome }}' === 'success';
+            const llmOutcome = '${{ steps.llm.outcome }}';
+            const llmPass = llmOutcome === 'success' || llmOutcome === 'skipped';
+            const allPass = detPass && llmPass;
+            const icon = allPass ? '✅' : '❌';
+            const llmLabel = llmOutcome === 'skipped'
+              ? '⏭ Skipped (human PR — manual merge required)'
+              : (llmPass ? '✅ Pass' : '❌ Fail (PR left open for human review)');
+
+            const body = [
+              `## Review Gate ${icon}`,
+              '',
+              '| Check | Result |',
+              '|---|---|',
+              `| Format / dedup / link reachability | ${detPass ? '✅ Pass' : '❌ Fail'} |`,
+              `| LLM grounded review | ${llmLabel} |`,
+              '',
+              allPass
+                ? '_All checks passed. Auto-merge will trigger if this is a trusted auto-update PR._'
+                : '_One or more checks failed. Review the details above before merging._',
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+
+      - name: Fail the job if any check failed
+        if: always()
+        run: |
+          DET="${{ steps.det.outcome }}"
+          LLM="${{ steps.llm.outcome }}"
+          if [ "$DET" != "success" ]; then
+            echo "::error::Deterministic checks failed."
+            exit 1
+          fi
+          if [ "$LLM" != "success" ] && [ "$LLM" != "skipped" ]; then
+            echo "::error::LLM review failed or could not run."
+            exit 1
+          fi
