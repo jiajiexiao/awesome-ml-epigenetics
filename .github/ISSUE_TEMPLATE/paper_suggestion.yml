@@ -7,32 +7,19 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for suggesting a paper! Fill in the fields below and the bot will
-        automatically validate the URL, check for duplicates, and post a
-        ready-to-use formatted entry.
+        Paste a few URLs or titles and submit.
+        The bot will try to resolve metadata automatically (title/year/URL),
+        validate links, check duplicates, and suggest ready-to-copy README entries.
 
-  - type: input
-    id: url
+  - type: textarea
+    id: items
     attributes:
-      label: URL / DOI
-      description: Prefer a DOI URL (`https://doi.org/...`) when available.
-      placeholder: "https://doi.org/10.xxxx/xxxxx"
-    validations:
-      required: true
-
-  - type: input
-    id: title
-    attributes:
-      label: Paper Title
-      placeholder: "Exact title as it appears in the paper"
-    validations:
-      required: true
-
-  - type: input
-    id: year
-    attributes:
-      label: Publication Year
-      placeholder: "2024"
+      label: URLs and/or Titles
+      description: One item per line. You can mix DOI URLs, paper URLs, and plain titles.
+      placeholder: |
+        https://doi.org/10.1038/s41467-025-55920-z
+        https://www.biorxiv.org/content/10.1101/2024.10.24.619766v1
+        Epigenetic Instability-Based Metrics in Cell-Free DNA for Early Cancer Detection
     validations:
       required: true
 
@@ -40,8 +27,9 @@ body:
     id: category
     attributes:
       label: Category
-      description: Which section of the list does this belong to?
+      description: Optional. If unknown, choose "Unsure" and the bot will suggest one.
       options:
+        - Unsure
         - DNA Methylation
         - Histone Modifications
         - Chromatin Accessibility
@@ -49,28 +37,22 @@ body:
         - Liquid Biopsy
         - Novel Epigenetic Assays
         - Datasets
-    validations:
-      required: true
 
   - type: textarea
-    id: description
+    id: notes
     attributes:
-      label: Description (optional)
+      label: Notes (optional)
       description: >
-        One sentence describing the specific ML method and contribution.
-        Name the exact architecture (e.g. "BERT-based encoder", "XGBoost
-        classifier") and the precise task. Leave blank and the bot will
-        suggest one based on the title.
-      placeholder: "Transformer encoder for cfDNA fragment-level cancer classification achieving AUC 0.94."
+        Optional hints for the bot, such as model type (e.g. XGBoost, Transformer),
+        category hints, or why the paper is important.
+      placeholder: "The first paper uses cfDNA fragmentomics + XGBoost; likely Liquid Biopsy."
 
   - type: checkboxes
     id: checklist
     attributes:
       label: Pre-submission checklist
       options:
-        - label: I searched the README and this paper is not already listed
+        - label: I searched the README and these papers are not already listed
           required: true
-        - label: ML/DL is the core method (not just mentioned in passing)
-          required: true
-        - label: The paper is directly about epigenetics
+        - label: The suggestions are relevant to ML in epigenetics
           required: true
