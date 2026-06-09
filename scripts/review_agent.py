@@ -290,13 +290,42 @@ def check_no_duplicate(
 
 
 def check_link_reachable(url: str) -> Tuple[bool, str]:
-    """HEAD request to verify URL resolves (follow redirects)."""
+    """Verify a URL resolves to real content (follow redirects).
+
+    Strategy:
+    1. HEAD request — fast, minimal bandwidth.
+    2. If HEAD returns 403/405/406 (many journals block HEAD), fall back to
+       GET with ``Range: bytes=0-0`` so we download only the first byte.
+    3. Accept 200 or 206 (partial content) as success.
+    """
     import httpx  # local import to avoid top-level side effect
+
+    _HEADERS = {
+        "User-Agent": (
+            "Mozilla/5.0 (compatible; awesome-ml-epigenetics-bot/1.0; "
+            "+https://github.com/jiajiexiao/awesome-ml-epigenetics)"
+        ),
+        "Accept": "text/html,application/xhtml+xml,*/*",
+    }
+    _HEAD_FALLBACK_CODES = {403, 405, 406, 501}
+
     try:
-        resp = httpx.head(url, timeout=12, follow_redirects=True)
+        resp = httpx.head(url, timeout=12, follow_redirects=True, headers=_HEADERS)
         if resp.status_code < 400:
             return True, ""
+
+        if resp.status_code in _HEAD_FALLBACK_CODES:
+            # Fall back to a minimal GET (only first byte, avoids full page load)
+            resp = httpx.get(
+                url, timeout=15, follow_redirects=True,
+                headers={**_HEADERS, "Range": "bytes=0-0"},
+            )
+            if resp.status_code in (200, 206):
+                return True, ""
+
         return False, f"HTTP {resp.status_code}: {url}"
+    except httpx.TimeoutException:
+        return False, f"Timeout fetching {url}"
     except Exception as e:
         return False, f"Unreachable {url}: {e}"
 

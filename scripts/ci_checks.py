@@ -105,7 +105,7 @@ def run_deterministic_checks(readme_path: Path) -> Tuple[bool, List[str]]:
         # Format
         ok, msg = check_format(entry)
         if not ok:
-            failures.append(msg)
+            failures.append(f"[format] {msg}")
             continue
 
         url = parse_entry_url(entry)
@@ -120,12 +120,12 @@ def run_deterministic_checks(readme_path: Path) -> Tuple[bool, List[str]]:
 
         ok, msg = check_no_duplicate(paper, existing_urls, existing_dois, existing_titles)
         if not ok:
-            failures.append(msg)
+            failures.append(f"[dedup] {msg}")
             continue
 
         ok, msg = check_link_reachable(url)
         if not ok:
-            failures.append(msg)
+            failures.append(f"[link] {msg}")
 
     if failures:
         print("[CI] FAIL — deterministic checks:")
