@@ -41,9 +41,23 @@ jobs:
             for (const pr of prs) {
               const m = (pr.head.ref || '').match(/^issue-suggestion\/(\d+)$/);
               if (!m) continue;
+              // Only ever touch paper-suggestion PRs (label set by issue-triage).
+              const prLabels = (pr.labels || []).map(l => l.name);
+              if (!prLabels.includes('from-issue')) continue;
               if (!isStale(pr.updated_at)) continue;
 
               const issueNum = parseInt(m[1], 10);
+              // Confirm the originating issue is a paper-suggestion before closing it.
+              let issueIsSuggestion = false;
+              try {
+                const { data: srcIssue } = await github.rest.issues.get({
+                  owner, repo, issue_number: issueNum,
+                });
+                issueIsSuggestion = (srcIssue.labels || [])
+                  .map(l => (typeof l === 'string' ? l : l.name))
+                  .includes('paper-suggestion');
+              } catch (e) { core.info(`issue #${issueNum} lookup skipped: ${e.message}`); }
+
               await github.rest.issues.createComment({
                 owner, repo, issue_number: pr.number,
                 body: [
@@ -66,24 +80,27 @@ jobs:
                 });
               } catch (e) { core.info(`branch delete skipped: ${e.message}`); }
 
-              // Mirror onto + close the originating issue.
-              await github.rest.issues.createComment({
-                owner, repo, issue_number: issueNum,
-                body: [
-                  '<!-- bot:stale-suggestion -->',
-                  `## ⏳ Closed after ${graceDays}-day grace period`, '',
-                  `The review gate kept [PR #${pr.number}](${pr.html_url}) open because it `
-                    + `did not pass, and there were no further updates for ${graceDays} days.`,
-                  '',
-                  'Comment `/triage` here with a corrected suggestion to start over.',
-                ].join('\n'),
-              });
-              await github.rest.issues.update({
-                owner, repo, issue_number: issueNum, state: 'closed',
-                state_reason: 'not_planned',
-              });
-              handledIssues.add(issueNum);
-              core.info(`Closed stalled PR #${pr.number} and issue #${issueNum}.`);
+              // Mirror onto + close the originating issue (only if it's a suggestion).
+              if (issueIsSuggestion) {
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: issueNum,
+                  body: [
+                    '<!-- bot:stale-suggestion -->',
+                    `## ⏳ Closed after ${graceDays}-day grace period`, '',
+                    `The review gate kept [PR #${pr.number}](${pr.html_url}) open because it `
+                      + `did not pass, and there were no further updates for ${graceDays} days.`,
+                    '',
+                    'Comment `/triage` here with a corrected suggestion to start over.',
+                  ].join('\n'),
+                });
+                await github.rest.issues.update({
+                  owner, repo, issue_number: issueNum, state: 'closed',
+                  state_reason: 'not_planned',
+                });
+                handledIssues.add(issueNum);
+              }
+              core.info(`Closed stalled PR #${pr.number}`
+                + (issueIsSuggestion ? ` and issue #${issueNum}.` : '.'));
             }
 
             // ── 2. Stalled paper-suggestion issues that never produced a PR ──

@@ -357,8 +357,9 @@ Uses `secrets.PR_PAT` (a fine-grained PAT) throughout; the standard `GITHUB_TOKE
 - **Triggers:** daily `schedule` (06:00 UTC) plus manual `workflow_dispatch`
 - **Permissions:** `contents: write` (delete stale branches), `issues: write`, `pull-requests: write`
 - Grace period is `GRACE_DAYS` (default **3**), measured from each item's last update:
-  1. Open `issue-suggestion/<n>` PRs with no activity for the grace period are commented on, closed, and their branch deleted; the originating issue is notified and closed (`not_planned`)
+  1. Open `issue-suggestion/<n>` PRs **labeled `from-issue`** with no activity for the grace period are commented on, closed, and their branch deleted; the originating issue is notified and closed (`not_planned`) **only if it still carries the `paper-suggestion` label**
   2. Open `paper-suggestion` issues that never produced a PR (e.g. category `Unsure`) and have been idle for the grace period are commented on and closed
+- The job only ever touches paper-suggestion PRs/issues (matched by the `from-issue`/`paper-suggestion` labels) — unrelated issues and PRs are never affected
 - Any new activity (a `/triage` comment, a push, an edit) resets the clock; closed items can be reopened or re-triaged at any time
 
 ---
