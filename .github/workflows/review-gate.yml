@@ -18,6 +18,8 @@ jobs:
   review:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Checkout PR head (static analysis only — never execute PR code)
