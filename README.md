@@ -26,6 +26,11 @@ A curated list of "awesome" machine learning resources, datasets, and papers in 
 
 <!-- AUTO-PAPERS:DNA_METHYLATION START -->
 - [Methylation-Aware Embedding Geometry Emerges from Bisulfite Pretraining in DNA Language Models](https://openreview.net/forum?id=C4lGPSE0X7) (2026) - Continual pretraining of DNABERT2 on bisulfite sequencing reads reveals that methylation is encoded in representation space, shown via geometric diagnostics of embedding norms and cosine distances.
+- [CpGene: a web application for epigenetic signature identification from DNA methylation arrays](https://doi.org/10.1093/bioinformatics/btag141) (2026) - AI-based feature ranking using scikit-learn for biomarker discovery in DNA methylation analysis, facilitating the identification of clinically relevant CpG sites.
+- [Integrative multi-cohort analysis of DNA methylation profiles for pancreatic ductal adenocarcinoma biomarker discovery and prognosis](https://doi.org/10.3389/fbinf.2026.1808516) (2026) - Interpretable machine-learning models for identifying a compact 18-CpG signature in pancreatic ductal adenocarcinoma, achieving reproducibility across four independent cohorts.
+- [Epigenetic Biomarkers for Age Estimation in Forensic Samples: A CpG-Site-Specific DNA Methylation Approach Using Machine Learning for Biological Age Prediction](https://doi.org/10.66838/fy9w6842) (2026) - Random forest regression model for biological age prediction using DNA methylation at six CpG loci, achieving MAE of 2.
+- [DeepStrataAge: an interpretable deep-learning clock that reveals stage- and sex-divergent DNA methylation aging dynamics](https://doi.org/10.1038/s41514-026-00358-w) (2026) - Deep neural network (DNN) model for DNA methylation aging prediction achieving a mean absolute error of 1.
+- [Multi-output learning for systematic missing value imputation in DNA methylation arrays.](https://doi.org/10.1093/bioadv/vbag052) (2026) - Multi-output regression and learning (MOREL) framework using support vector regression, random forest, and deep neural networks for systematic missing value imputation in DNA methylation arrays, achieving improved accuracy in epigenetic age prediction models.
 <!-- AUTO-PAPERS:DNA_METHYLATION END -->
 
 ### Histone Modifications
@@ -34,6 +39,8 @@ A curated list of "awesome" machine learning resources, datasets, and papers in 
 - [DeepDiff: DEEP-learning for predicting DIFFerential gene expression from histone modifications](https://academic.oup.com/bioinformatics/article/34/17/i891/5093224) (2018) - Hybrid (attention + LSTM) deep learning model for gene expression prediction from histone modification.
 
 <!-- AUTO-PAPERS:HISTONE_MODIFICATIONS START -->
+- [Machine and Deep Learning Reveal Sequence Determinants Encoding Bivalent Histone Modifications](https://doi.org/10.1038/s42003-026-09962-8) (2026) - XGBoost classifier with SHAP feature attribution for distinguishing bivalent from monovalent histone modifications based on k-mer sequence features, achieving high predictive accuracy.
+- [PATTY corrects open-chromatin bias for improved bulk and single-cell CUT&Tag profiling.](https://doi.org/10.1038/s41467-026-73599-8) (2026) - Machine learning-based bias correction method PATTY for CUT&Tag profiling, enhancing histone modification signal detection and single-cell clustering accuracy.
 <!-- AUTO-PAPERS:HISTONE_MODIFICATIONS END -->
 
 ### Chromatin Accessibility
