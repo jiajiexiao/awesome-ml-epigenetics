@@ -56,6 +56,7 @@ class Suggestion:
     category_display: str = ""
     description: str = ""
     abstract: str = ""
+    hint_category: str = ""
 
 
 def _set_output(key: str, value: str) -> None:
@@ -208,6 +209,43 @@ def _normalise_url(text: str) -> str:
     return ""
 
 
+def _norm_token(text: str) -> str:
+    """Lowercase and collapse non-alphanumerics to single spaces for matching."""
+    return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
+
+
+def _category_hint_index(cfg: dict) -> dict:
+    """Map normalized hint text (display/slug/marker/config key) -> display name."""
+    idx: dict[str, str] = {}
+    for display, marker in _CATEGORY_TO_MARKER.items():
+        idx[_norm_token(display)] = display
+        idx[_norm_token(marker)] = display
+    for key, cc in (cfg.get("categories") or {}).items():
+        display = _MARKER_TO_DISPLAY.get(cc.get("readme_marker", ""), "")
+        if not display:
+            continue
+        idx[_norm_token(key)] = display
+        if cc.get("slug"):
+            idx[_norm_token(cc["slug"])] = display
+    return idx
+
+
+def _split_category_hint(line: str, hint_index: dict) -> tuple[str, str]:
+    """Split a `category: url/title` hint line into (item, display_category).
+
+    Only treats the text before the first colon as a category when it matches a
+    known category; otherwise the line is returned unchanged (so URLs and titles
+    that contain colons are left intact).
+    """
+    if ":" not in line:
+        return line, ""
+    prefix, rest = line.split(":", 1)
+    display = hint_index.get(_norm_token(prefix))
+    if display and rest.strip():
+        return rest.strip(), display
+    return line, ""
+
+
 def _resolve_from_doi(url: str, email: str) -> tuple[str, int, str]:
     doi = re.sub(r"^https?://doi\.org/", "", url, flags=re.I)
     api = f"https://api.crossref.org/works/{doi}"
@@ -355,22 +393,36 @@ def main() -> None:
 
     lines = _extract_lines(items_raw)
 
+    # Each candidate carries an optional category hint (only comment lines may set
+    # one via the `category: url` syntax the bot advertises).
+    hint_index = _category_hint_index(cfg)
+    parsed: List[tuple[str, str]] = [(ln, "") for ln in lines]
+
     # Optional follow-up via issue comments: include lines from comments that ask /triage
     if issue_comment and "/triage" in issue_comment:
         extra = issue_comment.replace("/triage", "")
-        lines.extend(_extract_lines(extra))
+        for ln in _extract_lines(extra):
+            item, hint = _split_category_hint(ln, hint_index)
+            parsed.append((item, hint))
 
-    seen = set()
-    uniq_lines: List[str] = []
-    for x in lines:
-        k = x.lower()
-        if k not in seen:
-            uniq_lines.append(x)
-            seen.add(k)
+    # Dedup within this run by resolved URL (falling back to the raw text), so the
+    # same paper from the issue body and a /triage comment isn't listed twice. A
+    # later hint is merged onto an earlier hint-less duplicate.
+    by_key: dict[str, list[str]] = {}
+    order: List[str] = []
+    for item, hint in parsed:
+        url = _normalise_url(item)
+        key = url.lower() if url else item.lower()
+        if key not in by_key:
+            by_key[key] = [item, hint]
+            order.append(key)
+        elif hint and not by_key[key][1]:
+            by_key[key][1] = hint
+    uniq: List[tuple[str, str]] = [(by_key[k][0], by_key[k][1]) for k in order]
 
     suggestions: List[Suggestion] = []
-    for item in uniq_lines[:12]:  # keep runtime bounded
-        s = Suggestion(raw=item)
+    for item, hint in uniq[:12]:  # keep runtime bounded
+        s = Suggestion(raw=item, hint_category=hint)
         try:
             if _is_url_item(item):
                 s.url = _normalise_url(item)
@@ -433,7 +485,7 @@ def main() -> None:
     for s in suggestions:
         if s.status == "ok" and not s.duplicate:
             marker, display, _score = classify_category(
-                f"{s.title} {notes}", cfg, fallback_display=user_category
+                f"{s.title} {notes}", cfg, fallback_display=s.hint_category or user_category
             )
             s.marker, s.category_display = marker, display
             s.description = _suggest_description(s.title, s.abstract, client, model, notes)
