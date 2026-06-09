@@ -128,7 +128,7 @@ def classify_category(text: str, cfg: dict, fallback_display: str = "") -> tuple
     if fallback_display:
         marker = _CATEGORY_TO_MARKER.get(fallback_display, "")
         return marker, fallback_display, 0
-    return "", "", 0
+    return "", "Unsure", 0
 
 
 def _suggest_description(title: str, abstract: str, client, model: str, context: str = "") -> str:
@@ -511,7 +511,7 @@ def main() -> None:
     if has_changes:
         status = "✅ Opening a pull request"
     elif to_add or needs_category:
-        status = "⚠️ Needs a category"
+        status = "⚠️ Some items marked Unsure"
     else:
         status = "⚠️ Partial results"
 
@@ -526,7 +526,7 @@ def main() -> None:
         resolved = s.title if s.title else "(unresolved)"
         if s.url:
             resolved = f"[{resolved}]({s.url})"
-        cat = s.category_display or ("—" if s.status != "ok" else "_unassigned_")
+        cat = s.category_display or "—"
         note = s.note or (f"resolved via {s.source}" if s.source else "")
         out.append(f"| `{s.raw[:60]}` | {icon} {resolved} | {cat} | {note} |")
 
@@ -540,15 +540,17 @@ def main() -> None:
     if needs_category:
         out += [
             "",
-            "### Action needed — category",
+            "### Category: Unsure",
             "",
-            "These resolved but I couldn't confidently auto-assign a category:",
+            "These resolved but couldn't be auto-categorized, so they're marked "
+            "**Unsure** and left out of the pull request for now:",
         ]
         for s in needs_category:
             out.append(f"- [{_sanitize_title(s.title)}]({s.url})")
         out.append(
-            "\nReply with `/triage` and add a category hint in the line "
-            "(e.g. `liquid biopsy: <url>`), or edit the issue's **Category** field."
+            "\nReply with `/triage` and add a category hint (e.g. "
+            "`liquid biopsy: <url>`), or edit the issue's **Category** field, "
+            "and I'll add them."
         )
 
     if unresolved:
