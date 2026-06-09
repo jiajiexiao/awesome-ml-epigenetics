@@ -391,7 +391,7 @@ Add the token as a repository secret named `PR_PAT`:
 **Repository → Settings → Branches → Add branch ruleset** for `main`:
 
 - Require status checks to pass: add `review-gate / review`
-- Do not require approvals for auto-update PRs (the gate replaces human review)
+- Do not require approvals for trusted auto-update PRs (the gate replaces human review). Issue-sourced PRs from external accounts are labeled `needs-human-review` and require a maintainer to approve or merge them manually.
 
 ### d) (Optional) Update the discovery email
 

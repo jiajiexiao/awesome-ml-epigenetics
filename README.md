@@ -118,7 +118,7 @@ No git or pull request needed — just [open a Paper Suggestion issue](../../iss
 3. Validate links and check for duplicates
 4. Open a pull request that **closes your issue when it merges**
 
-The PR runs the same review-gate checks and **auto-merges once they pass** — a maintainer only steps in if a check fails. Category is optional: pick one from the dropdown or leave it as **Unsure** and the bot will infer it (papers it still can't categorize are left out of the PR until you add a hint).
+The PR runs the same review-gate checks and **auto-merges once they pass** for trusted repo members (OWNER/MEMBER/COLLABORATOR). If the issue came from an external account, the PR is labeled `needs-human-review` and stays open for maintainer approval even when the checks pass. Category is optional: pick one from the dropdown or leave it as **Unsure** and the bot will infer it (papers it still can't categorize are left out of the PR until you add a hint).
 
 To re-run the bot after editing your issue, comment **`/triage`** (optionally followed by more URLs/titles); it updates the same pull request.
 

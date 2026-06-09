@@ -65,8 +65,10 @@ body:
         - On submit — and whenever you **edit** this issue — the bot automatically
           resolves metadata, auto-assigns a category, writes a grounded description,
           and opens a pull request that **closes this issue when it merges**.
-        - The PR **auto-merges once all checks pass**; a maintainer only steps in
-          if a check fails.
+        - Trusted issue submissions **auto-merge once all checks pass**. If the
+          issue was opened by an external account, the bot adds
+          `needs-human-review` and a maintainer has to approve or merge it
+          manually even when the checks pass.
         - To make the bot reprocess from a **comment** (e.g. to add more papers or
           retry one that failed), start your comment with **`/triage`** followed by
           the URLs/titles. Comments without `/triage` are ignored by the bot.
