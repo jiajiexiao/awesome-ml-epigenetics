@@ -129,6 +129,11 @@ def _abstract_from_openalex_doi(url: str, email: str) -> str:
 
 
 _ARXIV_ID_RE = re.compile(r"arxiv\.org/(?:abs|pdf)/([\w.\-/]+?)(?:v\d+)?(?:\.pdf)?/?$", re.I)
+_BIORXIV_DOI_RE = re.compile(
+    r"(?:bio|med)rxiv\.org/content/(10\.\d{4,9}/[^\s?#/]+?)(?:v\d+)?(?:\.(?:abstract|full|pdf))?/?$",
+    re.I,
+)
+_NATURE_DOI_RE = re.compile(r"(?:www\.)?nature\.com/articles/([\w-]+)", re.I)
 
 
 def _resolve_from_arxiv(url: str) -> tuple[str, int, str]:
@@ -156,6 +161,53 @@ def _resolve_from_arxiv(url: str) -> tuple[str, int, str]:
         return title, year, abstract
     except Exception:
         return "", 0, ""
+
+
+def _suggest_doi_hint(url: str) -> str:
+    """Infer a doi.org URL from common journal/preprint URL patterns."""
+    m = _BIORXIV_DOI_RE.search(url)
+    if m:
+        return f"https://doi.org/{m.group(1)}"
+    m = _NATURE_DOI_RE.search(url)
+    if m:
+        return f"https://doi.org/10.1038/{m.group(1)}"
+    return ""
+
+
+def _resolve_from_biorxiv_url(url: str, email: str) -> tuple[str, int, str, str]:
+    """Resolve title/year/abstract for a bioRxiv or medRxiv page URL.
+
+    Returns (title, year, abstract, canonical_doi_url). On failure, title is
+    empty but canonical_doi_url is still returned as a hint when extractable.
+    """
+    m = _BIORXIV_DOI_RE.search(url)
+    if not m:
+        return "", 0, "", ""
+    doi = m.group(1).rstrip(".")
+    doi_url = f"https://doi.org/{doi}"
+    server = "medrxiv" if "medrxiv" in url.lower() else "biorxiv"
+    try:
+        r = httpx.get(
+            f"https://api.biorxiv.org/details/{server}/{doi}/na/json",
+            timeout=15,
+        )
+        if r.status_code < 400:
+            items = r.json().get("collection") or []
+            if items:
+                it = items[-1]
+                title = (it.get("title") or "").strip()
+                abstract = (it.get("abstract") or "").strip()
+                date_str = (it.get("date") or "")[:4]
+                year = int(date_str) if date_str.isdigit() else 0
+                if title:
+                    return title, year, abstract, doi_url
+    except Exception:
+        pass
+    # Fall back to Crossref with the extracted DOI
+    t, y, ab = _resolve_from_doi(doi_url, email)
+    if t:
+        return t, y, ab, doi_url
+    return "", 0, "", doi_url
 
 
 def classify_category(text: str, cfg: dict, fallback_display: str = "") -> tuple[str, str, int]:
@@ -500,10 +552,39 @@ def main() -> None:
                     else:
                         s.title = re.sub(r"[-_]+", " ", s.url.rsplit("/", 1)[-1]).strip()[:160]
                         s.source = "url"
+                elif re.search(r"(?:bio|med)rxiv\.org/", s.url, re.I):
+                    t, y, ab, canonical = _resolve_from_biorxiv_url(s.url, email)
+                    if t:
+                        s.title, s.year, s.abstract, s.url = t, y, ab, canonical
+                        s.source = "biorxiv"
+                    else:
+                        hint = canonical or _suggest_doi_hint(s.url)
+                        s.status = "warning"
+                        s.note = (
+                            "bioRxiv/medRxiv API lookup failed. "
+                            f"Try submitting the DOI directly: "
+                            f"`{hint or 'https://doi.org/10.1101/...'}`"
+                        )
                 else:
-                    # Non-DOI URL: best-effort title from URL slug
-                    s.title = re.sub(r"[-_]+", " ", s.url.rsplit("/", 1)[-1]).strip()[:160]
-                    s.source = "url"
+                    hint = _suggest_doi_hint(s.url)
+                    if hint:
+                        t, y, ab = _resolve_from_doi(hint, email)
+                        if t:
+                            s.title, s.year, s.abstract, s.url = t, y, ab, hint
+                            s.source = "crossref"
+                        else:
+                            s.status = "warning"
+                            s.note = (
+                                f"Crossref lookup failed for inferred DOI. "
+                                f"Try submitting the DOI directly: `{hint}`"
+                            )
+                    else:
+                        s.status = "warning"
+                        s.note = (
+                            "Non-DOI URL: couldn't resolve metadata. "
+                            "Please resubmit with the paper's DOI "
+                            "(e.g. `https://doi.org/10.XXXX/...`)."
+                        )
             else:
                 s.title = item
                 t, u, y, score, ab = _resolve_from_title(item, email)
@@ -522,6 +603,14 @@ def main() -> None:
             elif not s.url and s.status == "pending":
                 s.status = "warning"
                 s.note = "No resolvable URL found."
+            # Demote ok-but-unresolved: a URL was found but no year means we
+            # can't place it in a section — treat as warning so it gets guidance.
+            if s.status == "ok" and not s.year:
+                s.status = "warning"
+                s.note = s.note or (
+                    "Could not determine publication year. "
+                    "Please resubmit with the paper's DOI."
+                )
         except Exception as e:
             s.status = "fail"
             s.note = f"Resolution error: {e}"
@@ -614,9 +703,13 @@ def main() -> None:
     if has_changes:
         status = "✅ Opening a pull request"
     elif needs_category:
-        status = "⚠️ Some items marked Unsure"
+        status = "⚠️ Category needed"
+    elif not suggestions:
+        status = "❌ Nothing could be parsed"
+    elif all(s.status != "ok" for s in suggestions):
+        status = "❌ All items failed — fix and retry"
     else:
-        status = "⚠️ Partial results"
+        status = "⚠️ Partial results — some items need fixing"
 
     out: List[str] = [
         "<!-- bot:issue-triage -->",
@@ -659,14 +752,25 @@ def main() -> None:
             "and I'll add them."
         )
 
-    if unresolved:
+    if not suggestions:
         out += [
             "",
-            "### Couldn't resolve",
+            "> **Nothing was parsed.** Make sure the **URLs and/or Titles** field "
+            "has one URL or title per line and that you submitted via the issue form.",
+        ]
+
+    if unresolved:
+        out += ["", "### ❌ Couldn't process — fix and retry", ""]
+        for s in unresolved:
+            if s.url and s.title:
+                label = f"[{_sanitize_title(s.title)}]({_md_url(s.url)})"
+            else:
+                label = f"`{s.raw[:80]}`"
+            out.append(f"- {label}: {s.note or 'resolution failed'}")
+        out += [
             "",
-            "I can reprocess replies: comment **`/triage`** followed by the DOIs/URLs "
-            "to retry. For anything still failing, please open a focused new issue "
-            "for that specific paper.",
+            "Comment **`/triage`** followed by the corrected URLs/DOIs to retry. "
+            "For persistent failures, open a focused new issue for that specific paper.",
         ]
 
     if issue_url:
