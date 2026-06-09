@@ -15,6 +15,7 @@ from __future__ import annotations
 import os
 import re
 import sys
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
@@ -107,6 +108,36 @@ def _abstract_from_openalex_doi(url: str, email: str) -> str:
         return _invert_abstract(r.json().get("abstract_inverted_index"))
     except Exception:
         return ""
+
+
+_ARXIV_ID_RE = re.compile(r"arxiv\.org/(?:abs|pdf)/([\w.\-/]+?)(?:v\d+)?(?:\.pdf)?/?$", re.I)
+
+
+def _resolve_from_arxiv(url: str) -> tuple[str, int, str]:
+    """Resolve title, year, and abstract for an arxiv.org/abs (or /pdf) URL."""
+    m = _ARXIV_ID_RE.search(url)
+    if not m:
+        return "", 0, ""
+    arxiv_id = m.group(1)
+    try:
+        r = httpx.get(
+            "https://export.arxiv.org/api/query",
+            params={"id_list": arxiv_id, "max_results": 1},
+            timeout=20,
+        )
+        if r.status_code >= 400:
+            return "", 0, ""
+        ns = "http://www.w3.org/2005/Atom"
+        entry = ET.fromstring(r.content).find(f"{{{ns}}}entry")
+        if entry is None:
+            return "", 0, ""
+        title = " ".join((entry.findtext(f"{{{ns}}}title") or "").split())
+        abstract = " ".join((entry.findtext(f"{{{ns}}}summary") or "").split())
+        published = (entry.findtext(f"{{{ns}}}published") or "").strip()
+        year = int(published[:4]) if published[:4].isdigit() else 0
+        return title, year, abstract
+    except Exception:
+        return "", 0, ""
 
 
 def classify_category(text: str, cfg: dict, fallback_display: str = "") -> tuple[str, str, int]:
@@ -434,6 +465,14 @@ def main() -> None:
                     t, y, ab = _resolve_from_openreview(s.url)
                     s.title, s.year, s.abstract = t, y, ab
                     s.source = "openreview"
+                elif "arxiv.org/" in s.url.lower():
+                    t, y, ab = _resolve_from_arxiv(s.url)
+                    if t:
+                        s.title, s.year, s.abstract = t, y, ab
+                        s.source = "arxiv"
+                    else:
+                        s.title = re.sub(r"[-_]+", " ", s.url.rsplit("/", 1)[-1]).strip()[:160]
+                        s.source = "url"
                 else:
                     # Non-DOI URL: best-effort title from URL slug
                     s.title = re.sub(r"[-_]+", " ", s.url.rsplit("/", 1)[-1]).strip()[:160]
