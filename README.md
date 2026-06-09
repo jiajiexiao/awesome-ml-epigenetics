@@ -18,52 +18,57 @@ A curated list of "awesome" machine learning resources, datasets, and papers in 
 ## Papers
 
 ### DNA Methylation
+<!-- AUTO-PAPERS:DNA_METHYLATION START -->
+- [CpGene: a web application for epigenetic signature identification from DNA methylation arrays](https://doi.org/10.1093/bioinformatics/btag141) (2026) - AI-based feature ranking using scikit-learn for biomarker discovery in DNA methylation analysis, facilitating the identification of clinically relevant CpG sites.
+- [DeepStrataAge: an interpretable deep-learning clock that reveals stage- and sex-divergent DNA methylation aging dynamics](https://doi.org/10.1038/s41514-026-00358-w) (2026) - Deep neural network (DNN) model for DNA methylation aging prediction achieving a mean absolute error of 1.
+- [Epigenetic Biomarkers for Age Estimation in Forensic Samples: A CpG-Site-Specific DNA Methylation Approach Using Machine Learning for Biological Age Prediction](https://doi.org/10.66838/fy9w6842) (2026) - Random forest regression model for biological age prediction using DNA methylation at six CpG loci, achieving MAE of 2.
+- [Integrative multi-cohort analysis of DNA methylation profiles for pancreatic ductal adenocarcinoma biomarker discovery and prognosis](https://doi.org/10.3389/fbinf.2026.1808516) (2026) - Interpretable machine-learning models for identifying a compact 18-CpG signature in pancreatic ductal adenocarcinoma, achieving reproducibility across four independent cohorts.
+- [Methylation-Aware Embedding Geometry Emerges from Bisulfite Pretraining in DNA Language Models](https://openreview.net/forum?id=C4lGPSE0X7) (2026) - Continual pretraining of DNABERT2 on bisulfite sequencing reads reveals that methylation is encoded in representation space, shown via geometric diagnostics of embedding norms and cosine distances.
+- [Multi-output learning for systematic missing value imputation in DNA methylation arrays.](https://doi.org/10.1093/bioadv/vbag052) (2026) - Multi-output regression and learning (MOREL) framework using support vector regression, random forest, and deep neural networks for systematic missing value imputation in DNA methylation arrays, achieving improved accuracy in epigenetic age prediction models.
+<!-- AUTO-PAPERS:DNA_METHYLATION END -->
+
 - [Epigenomic language models powered by Cerebras](https://arxiv.org/abs/2112.07571) (2021) - BERT model pretrained on human genome and across 127 cell types with DNA sequence and paired epigenetic state inputs. 
 - [MethylNet: Deep learning for DNA methylation analysis](https://bmcbioinformatics.biomedcentral.com/articles/10.1186/s12859-020-3443-8) (2020) - VAE for analyzing DNA methylation data.
 - [DeepCpG: Accurate prediction of single-cell DNA methylation states using deep learning](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-017-1189-z) (2017) - CNN model for predicting single-cell DNA methylation states.
 - [Detection of significantly differentially methylated regions in targeted bisulfite sequencing data](https://academic.oup.com/bioinformatics/article/29/13/1647/200453) (2013) - Stats model for identifying differentially methylated region (DMR) from microarray data (i.e. clustering/segment).
 - [A nonparametric Bayesian approach for clustering bisulfate-based DNA methylation profiles](https://link.springer.com/article/10.1186/1471-2164-13-S6-S20) (2012) - Bayesian stats model for clustering/segment microarray data. 
 
-<!-- AUTO-PAPERS:DNA_METHYLATION START -->
-- [Methylation-Aware Embedding Geometry Emerges from Bisulfite Pretraining in DNA Language Models](https://openreview.net/forum?id=C4lGPSE0X7) (2026) - Continual pretraining of DNABERT2 on bisulfite sequencing reads reveals that methylation is encoded in representation space, shown via geometric diagnostics of embedding norms and cosine distances.
-- [CpGene: a web application for epigenetic signature identification from DNA methylation arrays](https://doi.org/10.1093/bioinformatics/btag141) (2026) - AI-based feature ranking using scikit-learn for biomarker discovery in DNA methylation analysis, facilitating the identification of clinically relevant CpG sites.
-- [Integrative multi-cohort analysis of DNA methylation profiles for pancreatic ductal adenocarcinoma biomarker discovery and prognosis](https://doi.org/10.3389/fbinf.2026.1808516) (2026) - Interpretable machine-learning models for identifying a compact 18-CpG signature in pancreatic ductal adenocarcinoma, achieving reproducibility across four independent cohorts.
-- [Epigenetic Biomarkers for Age Estimation in Forensic Samples: A CpG-Site-Specific DNA Methylation Approach Using Machine Learning for Biological Age Prediction](https://doi.org/10.66838/fy9w6842) (2026) - Random forest regression model for biological age prediction using DNA methylation at six CpG loci, achieving MAE of 2.
-- [DeepStrataAge: an interpretable deep-learning clock that reveals stage- and sex-divergent DNA methylation aging dynamics](https://doi.org/10.1038/s41514-026-00358-w) (2026) - Deep neural network (DNN) model for DNA methylation aging prediction achieving a mean absolute error of 1.
-- [Multi-output learning for systematic missing value imputation in DNA methylation arrays.](https://doi.org/10.1093/bioadv/vbag052) (2026) - Multi-output regression and learning (MOREL) framework using support vector regression, random forest, and deep neural networks for systematic missing value imputation in DNA methylation arrays, achieving improved accuracy in epigenetic age prediction models.
-<!-- AUTO-PAPERS:DNA_METHYLATION END -->
-
 ### Histone Modifications
-
-- [DeepHistone: A deep learning approach to predicting histone modifications](https://bmcgenomics.biomedcentral.com/articles/10.1186/s12864-019-5489-4) (2019) - CNN-based model for histone modification prediction.
-- [DeepDiff: DEEP-learning for predicting DIFFerential gene expression from histone modifications](https://academic.oup.com/bioinformatics/article/34/17/i891/5093224) (2018) - Hybrid (attention + LSTM) deep learning model for gene expression prediction from histone modification.
-
 <!-- AUTO-PAPERS:HISTONE_MODIFICATIONS START -->
 - [Machine and Deep Learning Reveal Sequence Determinants Encoding Bivalent Histone Modifications](https://doi.org/10.1038/s42003-026-09962-8) (2026) - XGBoost classifier with SHAP feature attribution for distinguishing bivalent from monovalent histone modifications based on k-mer sequence features, achieving high predictive accuracy.
 - [PATTY corrects open-chromatin bias for improved bulk and single-cell CUT&Tag profiling.](https://doi.org/10.1038/s41467-026-73599-8) (2026) - Machine learning-based bias correction method PATTY for CUT&Tag profiling, enhancing histone modification signal detection and single-cell clustering accuracy.
 <!-- AUTO-PAPERS:HISTONE_MODIFICATIONS END -->
 
+- [DeepHistone: A deep learning approach to predicting histone modifications](https://bmcgenomics.biomedcentral.com/articles/10.1186/s12864-019-5489-4) (2019) - CNN-based model for histone modification prediction.
+- [DeepDiff: DEEP-learning for predicting DIFFerential gene expression from histone modifications](https://academic.oup.com/bioinformatics/article/34/17/i891/5093224) (2018) - Hybrid (attention + LSTM) deep learning model for gene expression prediction from histone modification.
+
 ### Chromatin Accessibility
+<!-- AUTO-PAPERS:CHROMATIN_ACCESSIBILITY START -->
+- [Cross-species prediction reveals chromatin regions with increased accessibility in humans](https://doi.org/10.1126/sciadv.ady9169) (2026) - CNN-based model for cross-species prediction of chromatin accessibility, identifying 23,414 human predicted increased chromatin accessibility regions (hPICAs) across 111 cell types.
+- [Evaluating single-cell ATAC-seq atlasing technologies using sequence-to-function modeling.](https://doi.org/10.1038/s41586-023-06819-6) (2026) - Random forest model for predicting candidate cis-regulatory elements based on sequence data, achieving high predictive accuracy across mammalian species.
+<!-- AUTO-PAPERS:CHROMATIN_ACCESSIBILITY END -->
 
 - [Effective gene expression prediction from sequence by integrating long-range interactions](https://www.nature.com/articles/s41592-021-01252-x) (2021) - Transformer-based model for chromatin accessibility prediction.
 - [DeepTACT: predicting 3D chromatin contacts via bootstrapping deep learning](https://academic.oup.com/nar/article/47/10/e60/5380496) (2019) - A bootstrapping deep learning model to predict chromatin contacts between regulatory elements.
 - [cisTopic: cis-regulatory topic modeling on single-cell ATAC-seq data](https://www.nature.com/articles/s41592-019-0367-1) (2019) - A probabilistic framework used to simultaneously discover coaccessible enhancers and stable cell states from sparse single-cell epigenomics data.
 
-<!-- AUTO-PAPERS:CHROMATIN_ACCESSIBILITY START -->
-- [Evaluating single-cell ATAC-seq atlasing technologies using sequence-to-function modeling.](https://doi.org/10.1038/s41586-023-06819-6) (2026) - Random forest model for predicting candidate cis-regulatory elements based on sequence data, achieving high predictive accuracy across mammalian species.
-- [Cross-species prediction reveals chromatin regions with increased accessibility in humans](https://doi.org/10.1126/sciadv.ady9169) (2026) - CNN-based model for cross-species prediction of chromatin accessibility, identifying 23,414 human predicted increased chromatin accessibility regions (hPICAs) across 111 cell types.
-<!-- AUTO-PAPERS:CHROMATIN_ACCESSIBILITY END -->
-
 ### Multi-omics Integration
+<!-- AUTO-PAPERS:MULTI_OMICS START -->
+- [Benchmarking component choices for unpaired single cell RNA and epigenomic integration](https://doi.org/10.1186/s13059-026-04071-5) (2026) - Neural network-based integration methods for unpaired single-cell RNA and epigenomic data, achieving improved clustering performance and cross-modality agreement.
+- [Defining neurovascular ecosystem states with single-cell multi-omics and machine learning: insights into cerebrovascular remodeling in the tumor context](https://doi.org/10.3389/fcell.2026.1846929) (2026) - Interpretable machine learning framework for analyzing single-cell multi-omics data to define neurovascular ecosystem states in gliomas, revealing stable epigenetic foundations and regulatory dependencies.
+<!-- AUTO-PAPERS:MULTI_OMICS END -->
+
 - [SCENIC+: single-cell multiomic inference of enhancers and gene regulatory networks](https://www.nature.com/articles/s41592-023-01938-4) (2021) - Gradient-boost regression model for single-cell multiomic inference of enhancers and gene regulatory networks. 
 - [MOFA+: A probabilistic framework for comprehensive integration of structured single-cell data](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-020-02015-1) (2020) - Framework for integrating multiple omics data types.
 
-<!-- AUTO-PAPERS:MULTI_OMICS START -->
-- [Defining neurovascular ecosystem states with single-cell multi-omics and machine learning: insights into cerebrovascular remodeling in the tumor context](https://doi.org/10.3389/fcell.2026.1846929) (2026) - Interpretable machine learning framework for analyzing single-cell multi-omics data to define neurovascular ecosystem states in gliomas, revealing stable epigenetic foundations and regulatory dependencies.
-- [Benchmarking component choices for unpaired single cell RNA and epigenomic integration](https://doi.org/10.1186/s13059-026-04071-5) (2026) - Neural network-based integration methods for unpaired single-cell RNA and epigenomic data, achieving improved clustering performance and cross-modality agreement.
-<!-- AUTO-PAPERS:MULTI_OMICS END -->
-
 ### Liquid Biopsy
+<!-- AUTO-PAPERS:LIQUID_BIOPSY START -->
+- [cfDECOR: a novel approach for estimating cell type contributions to cfDNA based on chromatin accessibility patterns](https://doi.org/10.1038/s41598-026-50180-3) (2026) - cfDECOR deconvolution model for predicting cell type contributions to cfDNA based on chromatin accessibility patterns, enhancing disease detection sensitivity.
+- [Epigenetic Instability-Based Metrics in Cell-Free DNA for Early Cancer Detection.](https://doi.org/10.1158/1078-0432.CCR-25-3384) (2026) - Random forest classifier using the epigenetic instability index (EII) for cfDNA-based early cancer detection, achieving 81% sensitivity at 95% specificity for stage IA lung adenocarcinoma.
+- [Learning Extremely Sparse Signals in High-Dimensional Cell-Free DNA Data Using Modern Hopfield Attention for Colorectal Cancer Detection](https://openreview.net/forum?id=tCYH1EdShW) (2026) - Fragment-Level Deep Learning uses Modern Hopfield Networks to identify extremely sparse tumor signal in cell-free DNA for colorectal cancer detection under a multiple-instance-learning setting.
+- [Noninvasive detection and prognostic stratification of biliary tract cancer using cell-free DNA fragmentomics: a model development and validation study](https://doi.org/10.1186/s43556-026-00468-7) (2026) - Ensemble machine-learning model integrating copy number variation, fragment size distribution, and promoter fragmentation entropy for cfDNA fragmentomics-based biliary tract cancer detection achieving AUC 0.
+<!-- AUTO-PAPERS:LIQUID_BIOPSY END -->
+
 - [A deep multiple instance learning framework improves microsatellite instability detection from tumor next generation sequencing](https://www.nature.com/articles/s41467-023-35823-7) (2025) - MIL for MSI detection.
 - [Large language model produces high accurate diagnosis of cancer from end-motif profiles of cell-free DNA](https://academic.oup.com/bib/article/25/5/bbae430/7747593) (2024) - LLM-based approach for cancer diagnosis using cfDNA end-motif profiles.
 - [MethylGPT: a foundation model for the DNA methylome](https://www.biorxiv.org/content/10.1101/2024.10.30.621013v2) (2024) - A transformer-decoder-based LM pretrained on methylation microarray data.
@@ -84,23 +89,18 @@ A curated list of "awesome" machine learning resources, datasets, and papers in 
 - [DISMIR: Deep learning-based noninvasive cancer detection by integrating DNA sequence and methylation information of individual cell-free DNA reads](https://academic.oup.com/bib/article/22/6/bbab250/6318194) (2021) - Hybrid sequence model (ConvNet+LSTM) for HCC detection with maximization of tumor fraction posterior probability.
 - [CancerDetector: ultrasensitive and non-invasive cancer detection at the resolution of individual reads using cell-free DNA methylation sequencing data](https://academic.oup.com/nar/article/46/15/e89/5036349) (2018) - Statistical model for read-level cancer detection from cfDNA.
 
-<!-- AUTO-PAPERS:LIQUID_BIOPSY START -->
-- [Noninvasive detection and prognostic stratification of biliary tract cancer using cell-free DNA fragmentomics: a model development and validation study](https://doi.org/10.1186/s43556-026-00468-7) (2026) - Ensemble machine-learning model integrating copy number variation, fragment size distribution, and promoter fragmentation entropy for cfDNA fragmentomics-based biliary tract cancer detection achieving AUC 0.
-- [Epigenetic Instability-Based Metrics in Cell-Free DNA for Early Cancer Detection.](https://doi.org/10.1158/1078-0432.CCR-25-3384) (2026) - Random forest classifier using the epigenetic instability index (EII) for cfDNA-based early cancer detection, achieving 81% sensitivity at 95% specificity for stage IA lung adenocarcinoma.
-- [Learning Extremely Sparse Signals in High-Dimensional Cell-Free DNA Data Using Modern Hopfield Attention for Colorectal Cancer Detection](https://openreview.net/forum?id=tCYH1EdShW) (2026) - Fragment-Level Deep Learning uses Modern Hopfield Networks to identify extremely sparse tumor signal in cell-free DNA for colorectal cancer detection under a multiple-instance-learning setting.
-- [cfDECOR: a novel approach for estimating cell type contributions to cfDNA based on chromatin accessibility patterns](https://doi.org/10.1038/s41598-026-50180-3) (2026) - cfDECOR deconvolution model for predicting cell type contributions to cfDNA based on chromatin accessibility patterns, enhancing disease detection sensitivity.
-<!-- AUTO-PAPERS:LIQUID_BIOPSY END -->
-
 ### Novel Epigenetic Assays
+<!-- AUTO-PAPERS:NOVEL_ASSAYS START -->
+<!-- AUTO-PAPERS:NOVEL_ASSAYS END -->
+
 - [Multimodal cell-free DNA whole-genome TAPS is sensitive and reveals specific cancer signals](https://www.nature.com/articles/s41467-024-55428-y) (2025) - Deep and less destructive assay than bisulfite sequencing.
 - [Enzymatic methyl sequencing detects DNA methylation at single-base resolution from picograms of DNA](https://www.nature.com/articles/s41592-021-01103-7) (2021) - Enzymatic methyl sequencing.
 - [scNMT-seq: Single-cell nucleosome, methylation and transcription sequencing](https://www.nature.com/articles/s41467-018-03149-4) (2018) - Single-cell nucleosome, methylation and transcription sequencing.
 - [DNA methylation detection: Bisulfite genomic sequencing analysis](https://link.springer.com/protocol/10.1007/978-1-61779-316-5_2) (2011) - Background of bisulfite sequencing. Also check [Bisulfite_sequencing](https://en.wikipedia.org/wiki/Bisulfite_sequencing) and [Reduced representation bisulfite sequencing](https://en.wikipedia.org/wiki/Reduced_representation_bisulfite_sequencing) on Wiki.
 
-<!-- AUTO-PAPERS:NOVEL_ASSAYS START -->
-<!-- AUTO-PAPERS:NOVEL_ASSAYS END -->
-
 ## Datasets
+<!-- AUTO-PAPERS:DATASETS START -->
+<!-- AUTO-PAPERS:DATASETS END -->
 
 - [ENCODE](https://www.encodeproject.org/) - Encyclopedia of DNA Elements.
 - [Roadmap Epigenomics](http://www.roadmapepigenomics.org/) - Comprehensive reference maps of epigenomic states across 111 human reference epigenomes.
@@ -111,9 +111,6 @@ A curated list of "awesome" machine learning resources, datasets, and papers in 
 - [MethylBank](https://ngdc.cncb.ac.cn/methbank/) - A comprehensive database for DNA methylation data.
 - [Loyfer et al. DNA methylation atlas of normal human cell types](https://www.nature.com/articles/s41586-022-05580-6#data-availability) (2023) - Whole-genome bisulfite sequencing atlas across 39 normal human cell types.
 - [BLUEPRINT Epigenome Project](https://projects.ensembl.org/blueprint/) - Reference epigenomes for haematopoietic cell types including histone modifications, DNA methylation, and gene expression.
-
-<!-- AUTO-PAPERS:DATASETS START -->
-<!-- AUTO-PAPERS:DATASETS END -->
 
 ## Contributing
 
@@ -138,7 +135,7 @@ New papers are discovered and proposed automatically twice a month via a GitHub 
 
 ### Manual contributions
 
-To add a resource yourself, open a pull request with your entry placed **above** the `<!-- AUTO-PAPERS:… START -->` marker in the relevant section. The review-gate CI will run format, dedup, and link-reachability checks automatically.
+To add a resource yourself, open a pull request with your entry placed **below** the `<!-- AUTO-PAPERS:… END -->` marker in the relevant section (the bot-owned block of recent papers sits at the top of each section; older curated classics follow below it). The review-gate CI will run format, dedup, and link-reachability checks automatically.
 
 Use this format:
 

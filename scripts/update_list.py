@@ -72,12 +72,109 @@ def parse_existing_entries(readme_text: str) -> Tuple[Set[str], Set[str], List[s
 
 
 def inject_entries(readme_text: str, marker: str, new_entries: List[str]) -> str:
-    """Insert new entries just before the END marker, preserving existing content."""
+    """Insert new entries into the bot block, keeping it sorted (newest year first)."""
     if not new_entries:
         return readme_text
+    return _rewrite_block(readme_text, marker, new_entries)
+
+
+# Year as it appears after the link: ``](url) (YYYY)``. Anchoring on the closing
+# link paren avoids matching a year that happens to be inside the title text.
+_ENTRY_YEAR_RE = re.compile(r"\]\(https?://[^\)]+\)\s*\((\d{4})")
+_ENTRY_TITLE_RE = re.compile(r"-\s*\[([^\]]+)\]")
+_MARKER_RE = re.compile(r"<!-- AUTO-PAPERS:([A-Z0-9_]+) START -->")
+
+
+def _entry_year(entry: str) -> int:
+    m = _ENTRY_YEAR_RE.search(entry)
+    return int(m.group(1)) if m else 0
+
+
+def _entry_title(entry: str) -> str:
+    m = _ENTRY_TITLE_RE.search(entry)
+    return m.group(1).strip().lower() if m else ""
+
+
+def _entry_sort_key(entry: str) -> Tuple[int, str]:
+    # Newest year first; ties broken alphabetically by title for determinism.
+    # Yearless entries (year 0) sort to the bottom.
+    return (-_entry_year(entry), _entry_title(entry))
+
+
+def _rewrite_block(readme_text: str, marker: str, extra_entries: List[str]) -> str:
+    """Merge *extra_entries* into the marker's bot block and re-sort by year desc."""
+    start_tag = f"<!-- AUTO-PAPERS:{marker} START -->"
     end_tag = f"<!-- AUTO-PAPERS:{marker} END -->"
-    insertion = "\n".join(new_entries) + "\n"
-    return readme_text.replace(end_tag, insertion + end_tag)
+    start_idx = readme_text.find(start_tag)
+    end_idx = readme_text.find(end_tag)
+    if start_idx == -1 or end_idx == -1 or end_idx < start_idx:
+        # Markers missing/misordered — fall back to legacy append behavior.
+        if extra_entries:
+            insertion = "\n".join(extra_entries) + "\n"
+            return readme_text.replace(end_tag, insertion + end_tag)
+        return readme_text
+
+    block_start = start_idx + len(start_tag)
+    block = readme_text[block_start:end_idx]
+    existing = [ln.rstrip() for ln in block.splitlines() if ln.strip().startswith("- ")]
+    merged = existing + list(extra_entries)
+    if not merged:
+        return readme_text
+
+    merged.sort(key=_entry_sort_key)
+    new_block = "\n" + "\n".join(merged) + "\n"
+    return readme_text[:block_start] + new_block + readme_text[end_idx:]
+
+
+def sort_all_blocks(readme_text: str) -> str:
+    """Re-sort every AUTO-PAPERS bot block in *readme_text* (newest year first)."""
+    for marker in _MARKER_RE.findall(readme_text):
+        readme_text = _rewrite_block(readme_text, marker, [])
+    return readme_text
+
+
+# Section/subsection headings (## or ###). Used to relocate bot blocks to the top
+# of their section so newly discovered (newest) papers lead the list.
+_HEADING_RE = re.compile(r"^#{2,3} .+$", re.MULTILINE)
+
+
+def move_blocks_under_headings(readme_text: str) -> str:
+    """Move each AUTO-PAPERS block to directly under its section heading.
+
+    Newest papers (sorted within the block) then appear first in each section,
+    above the older hand-curated classics. Idempotent: a block already at the top
+    of its section is left untouched.
+    """
+    for marker in _MARKER_RE.findall(readme_text):
+        block_re = re.compile(
+            rf"<!-- AUTO-PAPERS:{marker} START -->.*?<!-- AUTO-PAPERS:{marker} END -->",
+            re.DOTALL,
+        )
+        m = block_re.search(readme_text)
+        if not m:
+            continue
+        block = m.group(0)
+
+        # Nearest heading preceding the block = the section it belongs to.
+        headings = [h for h in _HEADING_RE.finditer(readme_text) if h.start() < m.start()]
+        if not headings:
+            continue
+        heading = headings[-1]
+
+        # Already directly under the heading (only blank lines between)? Skip.
+        if readme_text[heading.end():m.start()].strip() == "":
+            continue
+
+        # Remove the block from its current location, then re-insert it right
+        # after the heading line; collapse any blank-line runs left behind.
+        readme_text = readme_text[: m.start()] + readme_text[m.end():]
+        insert_at = heading.end()
+        readme_text = readme_text[:insert_at] + "\n" + block + "\n" + readme_text[insert_at:]
+        readme_text = re.sub(r"\n{3,}", "\n\n", readme_text)
+
+    return readme_text
+
+
 
 
 def render_entry(paper: CandidatePaper) -> str:
@@ -315,11 +412,25 @@ def main() -> None:
     parser.add_argument("--category", help="Category slug (e.g. dna-methylation)")
     parser.add_argument("--all-categories", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--sort",
+        action="store_true",
+        help="Re-sort every AUTO-PAPERS block by year (newest first) and exit.",
+    )
     args = parser.parse_args()
 
     cfg = load_config(args.config)
     readme_text = README_PATH.read_text(encoding="utf-8")
     all_categories: Dict[str, dict] = cfg.get("categories", {})
+
+    if args.sort:
+        sorted_text = sort_all_blocks(move_blocks_under_headings(readme_text))
+        if sorted_text != readme_text:
+            README_PATH.write_text(sorted_text, encoding="utf-8")
+            print("README.md re-sorted (newest first, bot blocks at section top).")
+        else:
+            print("README.md already sorted — no change.")
+        sys.exit(0)
 
     if args.all_categories:
         cats = list(all_categories.items())
