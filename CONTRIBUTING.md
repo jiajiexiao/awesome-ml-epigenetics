@@ -63,6 +63,7 @@ This document describes the architecture of the automated paper-discovery pipeli
 - **Ensemble voting.** A paper must pass *both* the rule-based scorer and the Stage-1 LLM to avoid false positives.
 - **Sharding.** One category per workflow run to stay well inside the free GitHub Models quota (~150 low-tier requests/day).
 - **Unprivileged CI.** `review-gate.yml` runs with minimal permissions and cannot merge; `auto-merge.yml` is a separate privileged workflow that only fires after the gate passes.
+- **Single source of truth for validation.** Link reachability, dedup, and the grounded LLM check run once, in `review-gate.yml`. `issue-triage.yml` only resolves metadata and writes the description; the gate's result — including concrete failure hints — is mirrored back onto the originating issue.
 
 ---
 
@@ -312,22 +313,22 @@ update_list.py  process_category()
 - **Triggers:** `issues` (opened/edited) and `issue_comment` (created/edited) on issues labeled `paper-suggestion`
 - On a **comment**, the bot only runs if the comment contains **`/triage`** (ordinary discussion is ignored); opening or editing the issue runs it automatically
 - Steps:
-  1. `scripts/issue_triage.py` resolves each pasted URL/title via OpenAlex, Crossref, and the OpenReview API → title, year, **abstract**
+  1. `scripts/issue_triage.py` resolves each pasted URL/title via OpenAlex, Crossref, the arXiv API, and the OpenReview API → title, year, **abstract**
   2. Auto-assigns a category (keyword match → user dropdown → `Unsure`) and writes an **abstract-grounded** description
-  3. Validates links, checks duplicates, and injects ready entries into `README.md`
+  3. Injects ready entries into `README.md` and opens the PR. Link reachability and dedup are **not** checked here — they are deferred to the review-gate CI to avoid duplicated work.
   4. Opens a PR via `secrets.PR_PAT` on a deterministic `issue-suggestion/<n>` branch (re-running `/triage` updates the same PR) whose body contains `Closes #<n>`
-  5. Replies on the issue with the PR link
+  5. Replies on the issue with the resolution summary (the authoritative pass/fail comes later from the review-gate)
 - **Permissions:** `contents: write`, `issues: write`, `pull-requests: write`, `models: read`
 - The PR carries the `from-issue` label, so it flows through the same review-gate and auto-merge path as scheduled updates — and closes the originating issue on merge
 
 ### `review-gate.yml` — CI on PRs touching README
 
 - Runs on every PR that modifies `README.md`
-- **Unprivileged** — only `contents: read`, `pull-requests: write`, `models: read`
+- **Unprivileged** — only `contents: read`, `issues: write`, `pull-requests: write`, `models: read`
 - Steps:
   1. Deterministic checks (`--check`): format lint, dedup against `origin/main`, link reachability (HEAD request)
   2. LLM grounded review (`--llm-review`): on PRs labeled `auto-update` **or** `from-issue`; verifies each new entry is genuinely relevant — exits `1` if the LLM is unavailable (keeps PR open rather than auto-merging unreviewed)
-  3. Posts a summary comment on the PR
+  3. Upserts a summary comment on the PR. On failure it adds a **What to review** section with the concrete reasons (the failing format/dedup/link entries, or the LLM's flagged issues, written to `CI_REPORT_FILE` by `ci_checks.py`). For issue-sourced PRs (`issue-suggestion/<n>` branch) the same verdict and hints are mirrored back onto the originating issue.
 
 ### `auto-merge.yml` — privileged merge after gate passes
 

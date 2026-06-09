@@ -122,7 +122,7 @@ jobs:
               issue_number: context.issue.number,
             });
             const botComment = comments.find(
-              c => c.user.type === 'Bot' && c.body.includes('Paper Suggestion Validation')
+              c => c.user.type === 'Bot' && c.body.includes('<!-- bot:issue-triage -->')
             );
 
             if (botComment) {

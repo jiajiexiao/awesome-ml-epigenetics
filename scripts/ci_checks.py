@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -31,6 +32,15 @@ from scripts.review_agent import (
 ROOT = Path(__file__).parent.parent
 README_PATH = ROOT / "README.md"
 CANDIDATES_JSON = ROOT / "candidates.json"
+
+
+def _append_report(lines: List[str]) -> None:
+    """Append a markdown block to CI_REPORT_FILE (if set) for the workflow to render."""
+    path = os.environ.get("CI_REPORT_FILE")
+    if not path:
+        return
+    with open(path, "a", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
 
 _ENTRY_LINE_RE = re.compile(r"^\+\s*-\s+\[.+?\]\(https?://[^\)]+\)")
 _URL_RE = re.compile(r"\]\((https?://[^\)]+)\)")
@@ -131,6 +141,10 @@ def run_deterministic_checks(readme_path: Path) -> Tuple[bool, List[str]]:
         print("[CI] FAIL — deterministic checks:")
         for f in failures:
             print(f"  ✗ {f}")
+        _append_report(
+            ["### ❌ Format / dedup / link checks", ""]
+            + [f"- {f}" for f in failures]
+        )
         return False, failures
 
     print(f"[CI] PASS — all {len(new_entries)} entry/entries passed deterministic checks.")
@@ -187,6 +201,11 @@ def run_llm_review(readme_path: Path) -> Tuple[bool, List[str]]:
     client = _get_llm_client()
     if not client:
         print("[CI/LLM] SKIP — GitHub Models unavailable (no GITHUB_TOKEN). Leaving PR open for human review.")
+        _append_report([
+            "### ⚠️ LLM grounded review could not run", "",
+            "- GitHub Models was unavailable (no `GITHUB_TOKEN`). The PR is held "
+            "open so a maintainer can review the new entries manually.",
+        ])
         # Exit 1 to hold the PR open when LLM is required
         return False, ["LLM review required but GitHub Models unavailable"]
 
@@ -203,6 +222,11 @@ def run_llm_review(readme_path: Path) -> Tuple[bool, List[str]]:
     )
 
     if not raw:
+        _append_report([
+            "### ❌ LLM grounded review", "",
+            "- The model call returned nothing. Re-run the job, or review the "
+            "entries manually before merging.",
+        ])
         return False, ["LLM call failed — cannot complete grounded review"]
 
     try:
@@ -213,6 +237,10 @@ def run_llm_review(readme_path: Path) -> Tuple[bool, List[str]]:
         issues: List[str] = data.get("issues") or []
         summary = str(data.get("summary", ""))
     except Exception:
+        _append_report([
+            "### ❌ LLM grounded review", "",
+            f"- Could not parse the model response: `{raw[:120]}`",
+        ])
         return False, [f"LLM response parse error: {raw[:120]}"]
 
     print(f"[CI/LLM] Decision: {overall}")
@@ -226,12 +254,18 @@ def run_llm_review(readme_path: Path) -> Tuple[bool, List[str]]:
     if overall == "approve":
         print("[CI/LLM] PASS — LLM review approved all entries.")
         return True, []
-    elif overall == "needs-review":
-        print("[CI/LLM] NEEDS-REVIEW — leaving PR open for human inspection.")
-        return False, issues or ["LLM flagged entries as needs-review"]
-    else:
-        print("[CI/LLM] FAIL — LLM review rejected entries.")
-        return False, issues or ["LLM rejected one or more entries"]
+
+    print(f"[CI/LLM] {overall.upper()} — leaving PR open for human inspection.")
+    detail = issues or [
+        "LLM flagged entries as needs-review" if overall == "needs-review"
+        else "LLM rejected one or more entries"
+    ]
+    _append_report(
+        ["### ❌ LLM grounded review", "", f"**Decision:** `{overall}`", ""]
+        + ([f"_{summary}_", ""] if summary else [])
+        + [f"- {i}" for i in detail]
+    )
+    return False, detail
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────

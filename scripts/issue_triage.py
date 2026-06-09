@@ -402,13 +402,8 @@ def main() -> None:
         print("ISSUE_BODY env var not set", file=sys.stderr)
         sys.exit(1)
 
-    from scripts.review_agent import (
-        _get_llm_client,
-        check_link_reachable,
-        check_no_duplicate,
-    )
-    from scripts.schemas import CandidatePaper, PubType
-    from scripts.update_list import inject_entries, parse_existing_entries
+    from scripts.review_agent import _get_llm_client
+    from scripts.update_list import inject_entries
 
     cfg = yaml.safe_load((ROOT / "config.yml").read_text(encoding="utf-8")) or {}
     email = (cfg.get("discovery") or {}).get("email", "auto-update@users.noreply.github.com")
@@ -487,56 +482,38 @@ def main() -> None:
                     s.status = "warning"
                     s.note = "Could not confidently resolve this title; reply with `/triage` and a DOI/URL, or open a focused issue."
 
-            if s.url:
-                ok, msg = check_link_reachable(s.url)
-                if not ok:
-                    s.status = "fail"
-                    s.note = msg
-                elif s.status == "pending":
-                    s.status = "ok"
-
-            if not s.url:
-                if s.status == "pending":
-                    s.status = "warning"
-                    s.note = "No resolvable URL found."
+            # Link reachability and duplicate detection are intentionally deferred
+            # to the review-gate CI (the single source of truth), which mirrors any
+            # failures back to this issue. Here we only resolve metadata.
+            if s.url and s.status == "pending":
+                s.status = "ok"
+            elif not s.url and s.status == "pending":
+                s.status = "warning"
+                s.note = "No resolvable URL found."
         except Exception as e:
             s.status = "fail"
             s.note = f"Resolution error: {e}"
         suggestions.append(s)
 
     readme_text = (ROOT / "README.md").read_text(encoding="utf-8")
-    existing_urls, existing_dois, existing_titles = parse_existing_entries(readme_text)
 
+    # ── Auto-assign category + description for resolved candidates ──────────────
     for s in suggestions:
-        if s.url and s.title:
-            paper = CandidatePaper(
-                title=s.title, url=s.url, year=s.year,
-                source="issue", pub_type=PubType.UNKNOWN,
-            )
-            ok, msg = check_no_duplicate(paper, existing_urls, existing_dois, existing_titles)
-            if not ok:
-                s.duplicate = True
-                if s.status == "ok":
-                    s.status = "warning"
-                s.note = f"Possible duplicate: {msg}"
-
-    # ── Auto-assign category + description for ready (non-duplicate) candidates ──
-    for s in suggestions:
-        if s.status == "ok" and not s.duplicate:
+        if s.status == "ok":
             marker, display, _score = classify_category(
                 f"{s.title} {notes}", cfg, fallback_display=s.hint_category or user_category
             )
             s.marker, s.category_display = marker, display
             s.description = _suggest_description(s.title, s.abstract, client, model, notes)
 
-    # Items eligible to be auto-added: resolved, not duplicate, have year + category
+    # Items eligible to be auto-added: resolved, with a category + year
     to_add = [
         s for s in suggestions
-        if s.status == "ok" and not s.duplicate and s.marker and s.year
+        if s.status == "ok" and s.marker and s.year
     ]
     needs_category = [
         s for s in suggestions
-        if s.status == "ok" and not s.duplicate and not s.marker
+        if s.status == "ok" and not s.marker
     ]
     unresolved = [s for s in suggestions if s.status != "ok"]
 
@@ -576,8 +553,8 @@ def main() -> None:
                 "",
                 f"Closes #{issue_number}",
                 "",
-                "Resolved and validated automatically from the issue, then injected "
-                "into `README.md` under their auto-assigned categories.",
+                "Resolved automatically from the issue and injected into "
+                "`README.md` under their auto-assigned categories.",
                 "",
                 "| Title | Category | Source |",
                 "|---|---|---|",
@@ -588,8 +565,11 @@ def main() -> None:
                 )
             pr_lines += [
                 "",
-                "> Review-gate checks (format / dedup / link reachability) run automatically.",
-                "> This PR is **not** auto-merged — a maintainer will review and merge.",
+                "> The **review-gate CI** validates these entries (format, dedup, link "
+                "reachability, and a grounded LLM check) — it is the single source of "
+                "truth and mirrors the outcome back to the issue.",
+                "> The PR **auto-merges once all checks pass**; if any fail it stays "
+                "open with concrete review hints.",
             ]
             pr_body_file = os.environ.get("PR_BODY_FILE")
             if pr_body_file:
@@ -601,15 +581,16 @@ def main() -> None:
     # ── Compose issue comment ──────────────────────────────────────────────────
     if has_changes:
         status = "✅ Opening a pull request"
-    elif to_add or needs_category:
+    elif needs_category:
         status = "⚠️ Some items marked Unsure"
     else:
         status = "⚠️ Partial results"
 
     out: List[str] = [
-        f"## {status} — Paper Suggestion Validation",
+        "<!-- bot:issue-triage -->",
+        f"## {status} — Paper suggestion triage",
         "",
-        "| Input | Result | Category | Notes |",
+        "| Input | Result | Category | Source/notes |",
         "|---|---|---|---|",
     ]
     for s in suggestions:
@@ -625,7 +606,9 @@ def main() -> None:
         out += [
             "",
             f"A pull request with **{len(to_add)}** entry/entries is being opened. "
-            "It will **close this issue automatically when merged**.",
+            "The **review-gate CI** validates them there (format, dedup, link "
+            "reachability, grounded LLM check) and posts the result back here; on "
+            "success the PR auto-merges and **closes this issue**.",
         ]
 
     if needs_category:
