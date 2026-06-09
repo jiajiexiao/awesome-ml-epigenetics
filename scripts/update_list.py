@@ -78,9 +78,10 @@ def inject_entries(readme_text: str, marker: str, new_entries: List[str]) -> str
     return _rewrite_block(readme_text, marker, new_entries)
 
 
-# Year as it appears after the link: ``](url) (YYYY)``. Anchoring on the closing
-# link paren avoids matching a year that happens to be inside the title text.
-_ENTRY_YEAR_RE = re.compile(r"\]\(https?://[^\)]+\)\s*\((\d{4})")
+# Publication year as it appears after the link: ``(YYYY) -``. Anchoring on the
+# ``) -`` that separates the year from the description (rather than on the link's
+# closing paren) keeps it robust to URLs that themselves contain parentheses.
+_ENTRY_YEAR_RE = re.compile(r"\((\d{4})\)\s*[-–]")
 _ENTRY_TITLE_RE = re.compile(r"-\s*\[([^\]]+)\]")
 _MARKER_RE = re.compile(r"<!-- AUTO-PAPERS:([A-Z0-9_]+) START -->")
 
@@ -95,83 +96,68 @@ def _entry_title(entry: str) -> str:
     return m.group(1).strip().lower() if m else ""
 
 
+# Datasets have no publication year; order them alphabetically by name instead.
+_DATASETS_MARKER = "DATASETS"
+
+# Section/subsection headings (## or ###). A marker's block spans every entry
+# from its START tag up to the next heading, so manual and bot entries are sorted
+# together into one newest-first list per section.
+_HEADING_RE = re.compile(r"^#{2,3} .+$", re.MULTILINE)
+
+
 def _entry_sort_key(entry: str) -> Tuple[int, str]:
     # Newest year first; ties broken alphabetically by title for determinism.
     # Yearless entries (year 0) sort to the bottom.
     return (-_entry_year(entry), _entry_title(entry))
 
 
+def _sort_entries(entries: List[str], marker: str) -> None:
+    """Sort *entries* in place: alphabetically for datasets, else newest year first."""
+    if marker == _DATASETS_MARKER:
+        entries.sort(key=_entry_title)
+    else:
+        entries.sort(key=_entry_sort_key)
+
+
+def _section_end(readme_text: str, after_idx: int) -> int:
+    """Index of the next ##/### heading after *after_idx* (or end of text)."""
+    next_heading = _HEADING_RE.search(readme_text, after_idx)
+    return next_heading.start() if next_heading else len(readme_text)
+
+
 def _rewrite_block(readme_text: str, marker: str, extra_entries: List[str]) -> str:
-    """Merge *extra_entries* into the marker's bot block and re-sort by year desc."""
+    """Merge *extra_entries* into the marker's section and re-sort the whole section.
+
+    The block spans from the START tag to the next heading, so every entry in the
+    section (manual + bot) is sorted into one list and the END tag is parked at the
+    bottom of the section.
+    """
     start_tag = f"<!-- AUTO-PAPERS:{marker} START -->"
     end_tag = f"<!-- AUTO-PAPERS:{marker} END -->"
     start_idx = readme_text.find(start_tag)
-    end_idx = readme_text.find(end_tag)
-    if start_idx == -1 or end_idx == -1 or end_idx < start_idx:
-        # Markers missing/misordered — fall back to legacy append behavior.
+    if start_idx == -1:
+        # Marker missing — fall back to legacy append behavior.
         if extra_entries:
             insertion = "\n".join(extra_entries) + "\n"
             return readme_text.replace(end_tag, insertion + end_tag)
         return readme_text
 
     block_start = start_idx + len(start_tag)
-    block = readme_text[block_start:end_idx]
-    existing = [ln.rstrip() for ln in block.splitlines() if ln.strip().startswith("- ")]
+    section_end = _section_end(readme_text, block_start)
+    region = readme_text[block_start:section_end].replace(end_tag, "")
+    existing = [ln.rstrip() for ln in region.splitlines() if ln.strip().startswith("- ")]
     merged = existing + list(extra_entries)
-    if not merged:
-        return readme_text
+    _sort_entries(merged, marker)
 
-    merged.sort(key=_entry_sort_key)
-    new_block = "\n" + "\n".join(merged) + "\n"
-    return readme_text[:block_start] + new_block + readme_text[end_idx:]
+    body = ("\n".join(merged) + "\n") if merged else ""
+    new_region = "\n" + body + end_tag + "\n\n"
+    return readme_text[:block_start] + new_region + readme_text[section_end:]
 
 
 def sort_all_blocks(readme_text: str) -> str:
-    """Re-sort every AUTO-PAPERS bot block in *readme_text* (newest year first)."""
+    """Re-sort every section that has an AUTO-PAPERS marker (newest first)."""
     for marker in _MARKER_RE.findall(readme_text):
         readme_text = _rewrite_block(readme_text, marker, [])
-    return readme_text
-
-
-# Section/subsection headings (## or ###). Used to relocate bot blocks to the top
-# of their section so newly discovered (newest) papers lead the list.
-_HEADING_RE = re.compile(r"^#{2,3} .+$", re.MULTILINE)
-
-
-def move_blocks_under_headings(readme_text: str) -> str:
-    """Move each AUTO-PAPERS block to directly under its section heading.
-
-    Newest papers (sorted within the block) then appear first in each section,
-    above the older hand-curated classics. Idempotent: a block already at the top
-    of its section is left untouched.
-    """
-    for marker in _MARKER_RE.findall(readme_text):
-        block_re = re.compile(
-            rf"<!-- AUTO-PAPERS:{marker} START -->.*?<!-- AUTO-PAPERS:{marker} END -->",
-            re.DOTALL,
-        )
-        m = block_re.search(readme_text)
-        if not m:
-            continue
-        block = m.group(0)
-
-        # Nearest heading preceding the block = the section it belongs to.
-        headings = [h for h in _HEADING_RE.finditer(readme_text) if h.start() < m.start()]
-        if not headings:
-            continue
-        heading = headings[-1]
-
-        # Already directly under the heading (only blank lines between)? Skip.
-        if readme_text[heading.end():m.start()].strip() == "":
-            continue
-
-        # Remove the block from its current location, then re-insert it right
-        # after the heading line; collapse any blank-line runs left behind.
-        readme_text = readme_text[: m.start()] + readme_text[m.end():]
-        insert_at = heading.end()
-        readme_text = readme_text[:insert_at] + "\n" + block + "\n" + readme_text[insert_at:]
-        readme_text = re.sub(r"\n{3,}", "\n\n", readme_text)
-
     return readme_text
 
 
@@ -424,10 +410,10 @@ def main() -> None:
     all_categories: Dict[str, dict] = cfg.get("categories", {})
 
     if args.sort:
-        sorted_text = sort_all_blocks(move_blocks_under_headings(readme_text))
+        sorted_text = sort_all_blocks(readme_text)
         if sorted_text != readme_text:
             README_PATH.write_text(sorted_text, encoding="utf-8")
-            print("README.md re-sorted (newest first, bot blocks at section top).")
+            print("README.md re-sorted (newest first; whole section per category).")
         else:
             print("README.md already sorted — no change.")
         sys.exit(0)

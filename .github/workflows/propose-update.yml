@@ -66,10 +66,15 @@ jobs:
               exit 1
             fi
           else
-            # Scheduled or dispatch without explicit category:
-            # cycle through categories by day-of-month (1 → idx 0, 15 → idx 1, …)
+            # Scheduled or dispatch without explicit category: cycle through
+            # every category over successive runs (1st → half 0, 15th → half 1)
+            # so all categories — including datasets — get refreshed in rotation.
+            YEAR=$(date +%Y)
+            MONTH=$(date +%-m)
             DOM=$(date +%-d)
-            IDX=$(( (DOM <= 14 ? 0 : 1) % ${#CATEGORIES[@]} ))
+            HALF=$(( DOM <= 14 ? 0 : 1 ))
+            RUN_INDEX=$(( (YEAR * 12 + (MONTH - 1)) * 2 + HALF ))
+            IDX=$(( RUN_INDEX % ${#CATEGORIES[@]} ))
             CAT="${CATEGORIES[$IDX]}"
           fi
           DATE=$(date +%Y-%m-%d)
