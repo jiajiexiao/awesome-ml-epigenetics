@@ -14,15 +14,14 @@ import re
 import sys
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Set, Tuple
 
 import yaml
 from rapidfuzz import fuzz
 
-from scripts.schemas import CandidatePaper, Decision, PubType
+from scripts.schemas import CandidatePaper, Decision
 from scripts.review_agent import (
     _get_llm_client,
-    check_no_duplicate,
     rule_based_score,
     stage1_llm_screen,
     stage2_deep_review,
@@ -172,7 +171,6 @@ def process_category(
     max_deep = llm_cfg.get("max_deep_reviews_per_day", 6)
     max_calls = llm_cfg.get("max_calls_per_paper", 4)
     deep_review_enabled = llm_cfg.get("deep_review_enabled", True)
-    oa_discovery = llm_cfg.get("oa_version_discovery", True)
     max_abstract_chars = llm_cfg.get("max_abstract_tokens", 800) * 4
     max_section_chars = llm_cfg.get("max_section_tokens", 1500) * 4
     email = cfg["discovery"]["email"]

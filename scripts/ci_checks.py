@@ -10,7 +10,6 @@ Usage (always run from project root):
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import re
 import subprocess
@@ -19,9 +18,8 @@ from datetime import date
 from pathlib import Path
 from typing import List, Tuple
 
-import httpx
 
-from scripts.schemas import CandidatePaper, Decision, PubType
+from scripts.schemas import CandidatePaper, PubType
 from scripts.review_agent import (
     _get_llm_client,
     _llm_call,
@@ -230,7 +228,6 @@ def run_llm_review(readme_path: Path) -> Tuple[bool, List[str]]:
         next_year=_TODAY.year + 1,
     )
 
-    import os
     cfg_model = "gpt-4o-mini"
     raw = _llm_call(
         client, cfg_model,
