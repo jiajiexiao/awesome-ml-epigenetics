@@ -59,6 +59,8 @@ A curated list of "awesome" machine learning resources, datasets, and papers in 
 - [MOFA+: A probabilistic framework for comprehensive integration of structured single-cell data](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-020-02015-1) (2020) - Framework for integrating multiple omics data types.
 
 <!-- AUTO-PAPERS:MULTI_OMICS START -->
+- [Defining neurovascular ecosystem states with single-cell multi-omics and machine learning: insights into cerebrovascular remodeling in the tumor context](https://doi.org/10.3389/fcell.2026.1846929) (2026) - Interpretable machine learning framework for analyzing single-cell multi-omics data to define neurovascular ecosystem states in gliomas, revealing stable epigenetic foundations and regulatory dependencies.
+- [Benchmarking component choices for unpaired single cell RNA and epigenomic integration](https://doi.org/10.1186/s13059-026-04071-5) (2026) - Neural network-based integration methods for unpaired single-cell RNA and epigenomic data, achieving improved clustering performance and cross-modality agreement.
 <!-- AUTO-PAPERS:MULTI_OMICS END -->
 
 ### Liquid Biopsy
@@ -86,6 +88,7 @@ A curated list of "awesome" machine learning resources, datasets, and papers in 
 - [Noninvasive detection and prognostic stratification of biliary tract cancer using cell-free DNA fragmentomics: a model development and validation study](https://doi.org/10.1186/s43556-026-00468-7) (2026) - Ensemble machine-learning model integrating copy number variation, fragment size distribution, and promoter fragmentation entropy for cfDNA fragmentomics-based biliary tract cancer detection achieving AUC 0.
 - [Epigenetic Instability-Based Metrics in Cell-Free DNA for Early Cancer Detection.](https://doi.org/10.1158/1078-0432.CCR-25-3384) (2026) - Random forest classifier using the epigenetic instability index (EII) for cfDNA-based early cancer detection, achieving 81% sensitivity at 95% specificity for stage IA lung adenocarcinoma.
 - [Learning Extremely Sparse Signals in High-Dimensional Cell-Free DNA Data Using Modern Hopfield Attention for Colorectal Cancer Detection](https://openreview.net/forum?id=tCYH1EdShW) (2026) - Fragment-Level Deep Learning uses Modern Hopfield Networks to identify extremely sparse tumor signal in cell-free DNA for colorectal cancer detection under a multiple-instance-learning setting.
+- [cfDECOR: a novel approach for estimating cell type contributions to cfDNA based on chromatin accessibility patterns](https://doi.org/10.1038/s41598-026-50180-3) (2026) - cfDECOR deconvolution model for predicting cell type contributions to cfDNA based on chromatin accessibility patterns, enhancing disease detection sensitivity.
 <!-- AUTO-PAPERS:LIQUID_BIOPSY END -->
 
 ### Novel Epigenetic Assays
