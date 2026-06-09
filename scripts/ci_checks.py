@@ -169,7 +169,10 @@ def _get_base_readme() -> str:
 _LLM_REVIEW_SYSTEM = (
     "You are a strict scientific curator reviewing new entries proposed for an "
     "'awesome' list of ML in epigenetics. Evaluate each entry for relevance, "
-    "accuracy, and format. Respond in strict JSON."
+    "accuracy, and format. Respond in strict JSON. "
+    "Do NOT penalize an entry for its publication year: recent or current-year "
+    "papers (including preprints dated this year or next) are expected and "
+    "welcome. Never treat a year as a 'future' or 'invalid' date."
 )
 
 _LLM_REVIEW_USER = """\
@@ -182,6 +185,10 @@ For each entry, check:
 1. Does the title and description accurately describe an ML/DL paper in epigenetics?
 2. Is the description concise and technically accurate based on the title alone?
 3. Are there any red flags (irrelevant, wrong category, duplicate concept)?
+
+Judge relevance and accuracy ONLY. The publication year is never a red flag —
+do not comment on, question, or reject an entry because of a recent, current, or
+seemingly future publication date.
 
 Respond with ONLY this JSON:
 {{

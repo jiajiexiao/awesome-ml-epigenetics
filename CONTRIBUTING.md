@@ -41,11 +41,16 @@ This document describes the architecture of the automated paper-discovery pipeli
 │                                    └────────────────────────┘   │
 └──────────────────────────────────────────────────────────────────┘
          ▼ PR opened
-┌────────────────────┐        ┌────────────────────┐
-│  review-gate CI    │──pass──▶  auto-merge.yml     │
+┌────────────────────┐  pass  ┌────────────────────┐
+│  review-gate CI    │───────▶│  auto-merge.yml     │
 │  (deterministic    │        │  (squash merge)     │
 │   + LLM grounded)  │        └────────────────────┘
 └────────────────────┘
+         │ fail → PR/issue stay open with concrete hints
+         ▼ no updates for 3 days
+┌────────────────────────┐
+│  stale-suggestions.yml │  → auto-close PR + issue
+└────────────────────────┘
         ▲
         │ PR opened (Closes #N)
 ┌────────────────────┐
@@ -64,6 +69,8 @@ This document describes the architecture of the automated paper-discovery pipeli
 - **Sharding.** One category per workflow run to stay well inside the free GitHub Models quota (~150 low-tier requests/day).
 - **Unprivileged CI.** `review-gate.yml` runs with minimal permissions and cannot merge; `auto-merge.yml` is a separate privileged workflow that only fires after the gate passes.
 - **Single source of truth for validation.** Link reachability, dedup, and the grounded LLM check run once, in `review-gate.yml`. `issue-triage.yml` only resolves metadata and writes the description; the gate's result — including concrete failure hints — is mirrored back onto the originating issue.
+- **Date-neutral relevance check.** The grounded LLM review judges relevance and accuracy only; it never penalizes an entry for a recent or current-year publication date (preprints dated this year are expected).
+- **Grace period, then auto-close.** A suggestion PR (and its originating issue) that fails the gate stays open with hints. If there are no further updates for 3 days, `stale-suggestions.yml` closes both so the queue stays clean; re-running `/triage` reopens the flow.
 
 ---
 
@@ -96,10 +103,11 @@ This document describes the architecture of the automated paper-discovery pipeli
     ├── ISSUE_TEMPLATE/
     │   └── paper_suggestion.yml ← Issue form for paper suggestions
     └── workflows/
-        ├── propose-update.yml  ← Scheduled discovery → PR
-        ├── issue-triage.yml    ← Suggestion issue → PR
-        ├── review-gate.yml     ← CI checks on PR
-        └── auto-merge.yml      ← Merge after gate passes
+        ├── propose-update.yml    ← Scheduled discovery → PR
+        ├── issue-triage.yml      ← Suggestion issue → PR
+        ├── review-gate.yml       ← CI checks on PR
+        ├── auto-merge.yml        ← Merge after gate passes
+        └── stale-suggestions.yml ← Auto-close stalled PRs/issues (3-day grace)
 ```
 
 `README.md` contains HTML comment markers that act as bot-owned sub-blocks:
@@ -327,7 +335,7 @@ update_list.py  process_category()
 - **Unprivileged** — only `contents: read`, `issues: write`, `pull-requests: write`, `models: read`
 - Steps:
   1. Deterministic checks (`--check`): format lint, dedup against `origin/main`, link reachability (HEAD request)
-  2. LLM grounded review (`--llm-review`): on PRs labeled `auto-update` **or** `from-issue`; verifies each new entry is genuinely relevant — exits `1` if the LLM is unavailable (keeps PR open rather than auto-merging unreviewed)
+  2. LLM grounded review (`--llm-review`): on PRs labeled `auto-update` **or** `from-issue`; verifies each new entry is genuinely relevant (judging relevance/accuracy only — never the publication year) — exits `1` if the LLM is unavailable (keeps PR open rather than auto-merging unreviewed)
   3. Upserts a summary comment on the PR. On failure it adds a **What to review** section with the concrete reasons (the failing format/dedup/link entries, or the LLM's flagged issues, written to `CI_REPORT_FILE` by `ci_checks.py`). For issue-sourced PRs (`issue-suggestion/<n>` branch) the same verdict and hints are mirrored back onto the originating issue.
 
 ### `auto-merge.yml` — privileged merge after gate passes
@@ -343,6 +351,15 @@ Fires as a `workflow_run` event after `review-gate` completes. Before merging it
 7. All required check runs succeeded
 
 Uses `secrets.PR_PAT` (a fine-grained PAT) throughout; the standard `GITHUB_TOKEN` cannot trigger further workflow runs. A GitHub release is cut only for the scheduled `auto-update/papers-*` batches, not for issue-sourced PRs.
+
+### `stale-suggestions.yml` — close stalled suggestions after a grace period
+
+- **Triggers:** daily `schedule` (06:00 UTC) plus manual `workflow_dispatch`
+- **Permissions:** `contents: write` (delete stale branches), `issues: write`, `pull-requests: write`
+- Grace period is `GRACE_DAYS` (default **3**), measured from each item's last update:
+  1. Open `issue-suggestion/<n>` PRs with no activity for the grace period are commented on, closed, and their branch deleted; the originating issue is notified and closed (`not_planned`)
+  2. Open `paper-suggestion` issues that never produced a PR (e.g. category `Unsure`) and have been idle for the grace period are commented on and closed
+- Any new activity (a `/triage` comment, a push, an edit) resets the clock; closed items can be reopened or re-triaged at any time
 
 ---
 
