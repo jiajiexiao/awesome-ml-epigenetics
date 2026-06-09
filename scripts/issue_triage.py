@@ -15,7 +15,7 @@ from __future__ import annotations
 import os
 import re
 import sys
-import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List
@@ -73,6 +73,24 @@ def _sanitize_title(title: str) -> str:
     t = title.replace("\n", " ").replace("[", "(").replace("]", ")").replace("|", "/")
     t = re.sub(r"\s+", " ", t).strip()
     return t[:240]
+
+
+def _md_url(url: str) -> str:
+    """Percent-encode characters that could break out of markdown link syntax.
+
+    User-supplied URLs are embedded as ``[text](url)`` in bot comments and PR
+    bodies; unescaped ``)``/``<``/whitespace would let a crafted value inject
+    arbitrary markdown. Encoding keeps real links working while neutralising it.
+    """
+    return (
+        url.strip()
+        .replace("\\", "%5C")
+        .replace(" ", "%20")
+        .replace("(", "%28")
+        .replace(")", "%29")
+        .replace("<", "%3C")
+        .replace(">", "%3E")
+    )
 
 
 def _clean_desc(desc: str) -> str:
@@ -226,7 +244,9 @@ def _extract_lines(text: str) -> List[str]:
         item = line.strip().lstrip("-*0123456789. ").strip()
         if not item or item.startswith("#"):
             continue
-        lines.append(item)
+        # Bound each line to keep regex matching linear (ReDoS safety) and to
+        # cap the work done on a single oversized issue line.
+        lines.append(item[:1000])
     return lines
 
 
@@ -367,6 +387,10 @@ def _resolve_from_openreview(url: str) -> tuple[str, int, str]:
                 continue
 
     # ── Fallback: scrape the forum HTML page (title/year only) ──
+    from scripts.netguard import is_public_url
+
+    if not is_public_url(url):
+        return "", 0, ""
     try:
         r = httpx.get(url, timeout=15)
         if r.status_code >= 400:
@@ -401,6 +425,14 @@ def main() -> None:
     if not issue_body:
         print("ISSUE_BODY env var not set", file=sys.stderr)
         sys.exit(1)
+
+    # Trust boundary: only issues opened by a repo owner/member/collaborator are
+    # eligible for unattended auto-merge. Anything from an external account gets
+    # the 'needs-human-review' label, which auto-merge.yml treats as a hard stop.
+    author_assoc = os.environ.get("ISSUE_AUTHOR_ASSOCIATION", "").strip().upper()
+    trusted_author = author_assoc in {"OWNER", "MEMBER", "COLLABORATOR"}
+    pr_labels = "from-issue" if trusted_author else "from-issue,needs-human-review"
+    _set_output("pr_labels", pr_labels)
 
     from scripts.review_agent import _get_llm_client
     from scripts.update_list import inject_entries
@@ -536,7 +568,7 @@ def main() -> None:
                     _clean_desc(notes.splitlines()[0]) if notes else
                     "_Add one sentence naming the exact model and task_"
                 )
-                entries.append(f"- [{title_s}]({s.url}) ({s.year}) - {desc}.")
+                entries.append(f"- [{title_s}]({_md_url(s.url)}) ({s.year}) - {desc}.")
             new_readme = inject_entries(new_readme, marker, entries)
 
         if new_readme != readme_text:
@@ -561,7 +593,7 @@ def main() -> None:
             ]
             for s in to_add:
                 pr_lines.append(
-                    f"| [{_sanitize_title(s.title)}]({s.url}) | {s.category_display} | {s.source} |"
+                    f"| [{_sanitize_title(s.title)}]({_md_url(s.url)}) | {s.category_display} | {s.source} |"
                 )
             pr_lines += [
                 "",
@@ -597,7 +629,7 @@ def main() -> None:
         icon = "✅" if s.status == "ok" else ("⚠️" if s.status == "warning" else "❌")
         resolved = s.title if s.title else "(unresolved)"
         if s.url:
-            resolved = f"[{resolved}]({s.url})"
+            resolved = f"[{resolved}]({_md_url(s.url)})"
         cat = s.category_display or "—"
         note = s.note or (f"resolved via {s.source}" if s.source else "")
         out.append(f"| `{s.raw[:60]}` | {icon} {resolved} | {cat} | {note} |")

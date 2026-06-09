@@ -50,6 +50,7 @@ jobs:
           ISSUE_COMMENT: ${{ github.event.comment.body || '' }}
           ISSUE_URL: ${{ github.event.issue.html_url }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_AUTHOR_ASSOCIATION: ${{ github.event.issue.author_association }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PYTHONPATH: ${{ github.workspace }}
         run: uv run python -m scripts.issue_triage
@@ -65,7 +66,7 @@ jobs:
           branch: ${{ steps.triage.outputs.branch }}
           title: ${{ steps.triage.outputs.pr_title }}
           body-path: /tmp/pr_body.md
-          labels: from-issue
+          labels: ${{ steps.triage.outputs.pr_labels || 'from-issue' }}
           delete-branch: true
 
       - name: Post or update issue comment

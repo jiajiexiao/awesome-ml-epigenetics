@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import re
 import time
-import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as ET
 from typing import Dict, Optional
 
 import httpx
@@ -185,6 +185,8 @@ def _fetch_biorxiv_html(paper: CandidatePaper) -> bool:
 # ── Unpaywall ─────────────────────────────────────────────────────────────────
 
 def _unpaywall_oa_url(doi: str, email: str) -> Optional[str]:
+    from .netguard import is_public_url
+
     url = f"https://api.unpaywall.org/v2/{doi}?email={email}"
     try:
         resp = httpx.get(url, timeout=15)
@@ -196,13 +198,22 @@ def _unpaywall_oa_url(doi: str, email: str) -> Optional[str]:
         time.sleep(_DELAY)
 
     best = data.get("best_oa_location") or {}
-    return best.get("url_for_landing_page") or best.get("url")
+    oa_url = best.get("url_for_landing_page") or best.get("url")
+    # The OA location comes from a third party — only return it if it is a
+    # public http(s) URL so downstream fetchers cannot be pointed inward.
+    if oa_url and is_public_url(oa_url):
+        return oa_url
+    return None
 
 
 # ── Generic HTML fetcher ──────────────────────────────────────────────────────
 
 def _fetch_generic_html(paper: CandidatePaper, url: str, source_label: str) -> bool:
     if not _BS4:
+        return False
+    from .netguard import is_public_url
+
+    if not is_public_url(url):
         return False
     try:
         resp = httpx.get(url, timeout=30, follow_redirects=True)

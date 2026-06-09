@@ -285,14 +285,16 @@ def check_no_duplicate(
     existing_titles: List[str],
 ) -> Tuple[bool, str]:
     """Return (True, '') if no duplicate found."""
-    from rapidfuzz import fuzz
+    from rapidfuzz import fuzz, process
     if paper.normalized_url in existing_urls:
         return False, f"Duplicate URL: {paper.normalized_url}"
     if paper.normalized_doi and paper.normalized_doi in existing_dois:
         return False, f"Duplicate DOI: {paper.normalized_doi}"
-    for t in existing_titles:
-        if fuzz.ratio(paper.normalized_title, t) > 88:
-            return False, f"Duplicate title (fuzzy match): {paper.title[:80]!r}"
+    # C-level scan that short-circuits at the cutoff instead of an O(n) Python loop.
+    if existing_titles and process.extractOne(
+        paper.normalized_title, existing_titles, scorer=fuzz.ratio, score_cutoff=88
+    ):
+        return False, f"Duplicate title (fuzzy match): {paper.title[:80]!r}"
     return True, ""
 
 
@@ -306,6 +308,14 @@ def check_link_reachable(url: str) -> Tuple[bool, str]:
     3. Accept 200 or 206 (partial content) as success.
     """
     import httpx  # local import to avoid top-level side effect
+
+    from .netguard import UnsafeURLError, validate_public_url
+
+    # SSRF guard: refuse non-public / non-http(s) targets before any request.
+    try:
+        validate_public_url(url)
+    except UnsafeURLError as e:
+        return False, f"Unsafe URL rejected ({e}): {url}"
 
     _HEADERS = {
         "User-Agent": (

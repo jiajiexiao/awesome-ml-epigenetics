@@ -44,10 +44,27 @@ jobs:
 
       - name: Select category shard
         id: shard
+        env:
+          # Pass untrusted dispatch input via env (never interpolate into the
+          # script body) to prevent shell injection.
+          INPUT_CATEGORY: ${{ inputs.category }}
+          EVENT_NAME: ${{ github.event_name }}
+          RUN_ID: ${{ github.run_id }}
         run: |
           CATEGORIES=(dna-methylation histone-modifications chromatin-accessibility multi-omics liquid-biopsy novel-assays datasets)
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.category }}" ]; then
-            CAT="${{ inputs.category }}"
+          # Validate the requested category against the allow-list; ignore anything else.
+          CAT=""
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$INPUT_CATEGORY" ]; then
+            for c in "${CATEGORIES[@]}"; do
+              if [ "$c" = "$INPUT_CATEGORY" ]; then
+                CAT="$INPUT_CATEGORY"
+                break
+              fi
+            done
+            if [ -z "$CAT" ]; then
+              echo "::error::Unknown category '$INPUT_CATEGORY' — must be one of: ${CATEGORIES[*]}"
+              exit 1
+            fi
           else
             # Scheduled or dispatch without explicit category:
             # cycle through categories by day-of-month (1 → idx 0, 15 → idx 1, …)
@@ -57,7 +74,7 @@ jobs:
           fi
           DATE=$(date +%Y-%m-%d)
           echo "category=$CAT" >> "$GITHUB_OUTPUT"
-          echo "branch=auto-update/papers-${{ github.run_id }}-$CAT" >> "$GITHUB_OUTPUT"
+          echo "branch=auto-update/papers-${RUN_ID}-$CAT" >> "$GITHUB_OUTPUT"
           echo "date=$DATE" >> "$GITHUB_OUTPUT"
 
       - name: Run pipeline
