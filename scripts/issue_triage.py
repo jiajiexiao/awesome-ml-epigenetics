@@ -55,6 +55,7 @@ class Suggestion:
     marker: str = ""
     category_display: str = ""
     description: str = ""
+    abstract: str = ""
 
 
 def _set_output(key: str, value: str) -> None:
@@ -75,6 +76,36 @@ def _sanitize_title(title: str) -> str:
 def _clean_desc(desc: str) -> str:
     d = re.sub(r"\s+", " ", desc.replace("`", " ").replace("|", "/")).strip()
     return d.rstrip(".")
+
+
+def _invert_abstract(inv: dict | None) -> str:
+    """Reconstruct plain text from an OpenAlex abstract_inverted_index."""
+    if not inv:
+        return ""
+    try:
+        positions: list[tuple[int, str]] = []
+        for word, idxs in inv.items():
+            for i in idxs:
+                positions.append((i, word))
+        positions.sort()
+        return " ".join(w for _, w in positions)
+    except Exception:
+        return ""
+
+
+def _abstract_from_openalex_doi(url: str, email: str) -> str:
+    """Fetch an abstract for a DOI via OpenAlex (Crossref abstracts are unreliable)."""
+    doi = re.sub(r"^https?://doi\.org/", "", url, flags=re.I).strip()
+    if not doi:
+        return ""
+    headers = {"User-Agent": f"awesome-ml-epigenetics ({email})"}
+    try:
+        r = httpx.get(f"https://api.openalex.org/works/doi:{doi}", timeout=15, headers=headers)
+        if r.status_code >= 400:
+            return ""
+        return _invert_abstract(r.json().get("abstract_inverted_index"))
+    except Exception:
+        return ""
 
 
 def classify_category(text: str, cfg: dict, fallback_display: str = "") -> tuple[str, str, int]:
@@ -100,29 +131,48 @@ def classify_category(text: str, cfg: dict, fallback_display: str = "") -> tuple
     return "", "", 0
 
 
-def _suggest_description(title: str, client, model: str, context: str = "") -> str:
-    """Generate a one-sentence description naming the model/architecture."""
+def _suggest_description(title: str, abstract: str, client, model: str, context: str = "") -> str:
+    """Generate a one-sentence description grounded in the paper's abstract.
+
+    The description is built ONLY from facts in the abstract. When no abstract is
+    available we fall back to a task-only sentence and explicitly forbid naming
+    any architecture, so the bot never fabricates a model (e.g. inventing a VAE).
+    """
     if not client:
         return ""
+    abstract = (abstract or "").strip()
     ctx = f"\nAuthor notes/hints: {context.strip()}" if context.strip() else ""
+    if abstract:
+        source = f"Abstract: {abstract[:1800]}"
+        rules = (
+            "Use ONLY facts stated in the abstract. Name the specific model "
+            "architecture (e.g. CNN, transformer, XGBoost, VAE) if and only if the "
+            "abstract explicitly names it; otherwise describe the task without a "
+            "model name. Never invent or guess a model, dataset, or result."
+        )
+    else:
+        source = "(No abstract available — you only have the title.)"
+        rules = (
+            "Describe only the general task implied by the title. Do NOT name any "
+            "specific model architecture, dataset, or metric, since the abstract is "
+            "unavailable. Do not guess or fabricate details."
+        )
     try:
         from scripts.review_agent import _llm_call
         raw = _llm_call(
             client, model,
             [
                 {"role": "system", "content": (
-                    "You write one-sentence entries for an awesome-list of ML in "
-                    "epigenetics. Always name the SPECIFIC model architecture "
-                    "(e.g. BERT, CNN, XGBoost, VAE, transformer encoder) and the "
-                    "precise task. Never use generic phrases like "
-                    "'machine learning-based' or 'deep learning approach'."
+                    "You write accurate one-sentence entries for an awesome-list of "
+                    "ML in epigenetics. Be factual and specific, but NEVER fabricate "
+                    "methods, architectures, datasets, or results."
                 )},
                 {"role": "user", "content": (
-                    f"Title: {title}{ctx}\nWrite ONE concise sentence (<=30 words) "
-                    "describing the method and task. No trailing period."
+                    f"Title: {title}\n{source}{ctx}\n\n{rules}\n"
+                    "Write ONE concise factual sentence (<=30 words). No trailing period."
                 )},
             ],
-            max_tokens=80,
+            max_tokens=90,
         )
         return _clean_desc(raw or "")
     except Exception:
@@ -158,13 +208,13 @@ def _normalise_url(text: str) -> str:
     return ""
 
 
-def _resolve_from_doi(url: str, email: str) -> tuple[str, int]:
+def _resolve_from_doi(url: str, email: str) -> tuple[str, int, str]:
     doi = re.sub(r"^https?://doi\.org/", "", url, flags=re.I)
     api = f"https://api.crossref.org/works/{doi}"
     headers = {"User-Agent": f"awesome-ml-epigenetics ({email})"}
     r = httpx.get(api, timeout=15, headers=headers)
     if r.status_code >= 400:
-        return "", 0
+        return "", 0, ""
     msg = r.json().get("message", {})
     title = (msg.get("title") or [""])[0]
     year = 0
@@ -173,7 +223,7 @@ def _resolve_from_doi(url: str, email: str) -> tuple[str, int]:
         if parts and parts[0]:
             year = int(parts[0])
             break
-    return title.strip(), year
+    return title.strip(), year, _abstract_from_openalex_doi(url, email)
 
 
 def _resolve_from_title(title: str, email: str) -> tuple[str, str, int, float]:
@@ -199,36 +249,75 @@ def _resolve_from_title(title: str, email: str) -> tuple[str, str, int, float]:
         return "", "", 0, 0.0
     url = best.get("doi") or best.get("primary_location", {}).get("landing_page_url") or ""
     year = int(best.get("publication_year") or 0)
-    return (best.get("display_name") or "").strip(), url, year, best_score
+    abstract = _invert_abstract(best.get("abstract_inverted_index"))
+    return (best.get("display_name") or "").strip(), url, year, best_score, abstract
 
 
-def _resolve_from_openreview(url: str) -> tuple[str, int]:
-    """Best-effort metadata extraction for OpenReview forum pages."""
-    r = httpx.get(url, timeout=15)
-    if r.status_code >= 400:
-        return "", 0
+def _resolve_from_openreview(url: str) -> tuple[str, int, str]:
+    """Resolve OpenReview metadata (title, year, abstract).
 
-    soup = BeautifulSoup(r.text, "html.parser")
+    Prefers the OpenReview API (which exposes the real abstract), falling back to
+    scraping the forum HTML page for title/year only.
+    """
+    m = re.search(r"[?&]id=([\w-]+)", url)
+    forum_id = m.group(1) if m else ""
 
-    title = ""
-    og = soup.find("meta", attrs={"property": "og:title"})
-    if og and og.get("content"):
-        title = og.get("content", "").strip()
+    if forum_id:
+        for api in ("https://api2.openreview.net/notes", "https://api.openreview.net/notes"):
+            try:
+                r = httpx.get(api, params={"forum": forum_id}, timeout=15)
+                if r.status_code >= 400:
+                    continue
+                notes = r.json().get("notes", [])
+                if not notes:
+                    continue
+                note = next((n for n in notes if n.get("id") == forum_id), notes[0])
+                content = note.get("content", {}) or {}
 
-    if not title and soup.title and soup.title.string:
-        title = soup.title.string.strip()
+                def _val(key: str) -> str:
+                    v = content.get(key)
+                    if isinstance(v, dict):
+                        v = v.get("value", "")
+                    return str(v or "").strip()
 
-    # Clean common suffixes
-    title = re.sub(r"\s*\|\s*OpenReview\s*$", "", title).strip()
+                title = _val("title")
+                abstract = _val("abstract")
+                year = 0
+                ym = re.search(r"\b(20\d{2})\b", f"{_val('year')} {_val('venue')}")
+                if ym:
+                    year = int(ym.group(1))
+                if not year and note.get("cdate"):
+                    try:
+                        from datetime import datetime, timezone
+                        year = datetime.fromtimestamp(note["cdate"] / 1000, timezone.utc).year
+                    except Exception:
+                        pass
+                if title:
+                    return title, year, abstract
+            except Exception:
+                continue
 
-    # Try to infer year from visible page text
-    text = soup.get_text(" ", strip=True)
-    year = 0
-    ym = re.search(r"\b(20\d{2})\b", text)
-    if ym:
-        year = int(ym.group(1))
-
-    return title, year
+    # ── Fallback: scrape the forum HTML page (title/year only) ──
+    try:
+        r = httpx.get(url, timeout=15)
+        if r.status_code >= 400:
+            return "", 0, ""
+        soup = BeautifulSoup(r.text, "html.parser")
+        title = ""
+        og = soup.find("meta", attrs={"property": "og:title"})
+        if og and og.get("content"):
+            title = og.get("content", "").strip()
+        if not title and soup.title and soup.title.string:
+            title = soup.title.string.strip()
+        title = re.sub(r"\s*\|\s*OpenReview\s*$", "", title).strip()
+        text = soup.get_text(" ", strip=True)
+        year = 0
+        ym = re.search(r"\b(20\d{2})\b", text)
+        if ym:
+            year = int(ym.group(1))
+        return title, year, ""
+    except Exception:
+        return "", 0, ""
 
 
 def _is_url_item(text: str) -> bool:
@@ -286,12 +375,12 @@ def main() -> None:
             if _is_url_item(item):
                 s.url = _normalise_url(item)
                 if "doi.org/" in s.url.lower():
-                    t, y = _resolve_from_doi(s.url, email)
-                    s.title, s.year = t, y
+                    t, y, ab = _resolve_from_doi(s.url, email)
+                    s.title, s.year, s.abstract = t, y, ab
                     s.source = "crossref"
                 elif "openreview.net/forum" in s.url.lower():
-                    t, y = _resolve_from_openreview(s.url)
-                    s.title, s.year = t, y
+                    t, y, ab = _resolve_from_openreview(s.url)
+                    s.title, s.year, s.abstract = t, y, ab
                     s.source = "openreview"
                 else:
                     # Non-DOI URL: best-effort title from URL slug
@@ -299,9 +388,9 @@ def main() -> None:
                     s.source = "url"
             else:
                 s.title = item
-                t, u, y, score = _resolve_from_title(item, email)
+                t, u, y, score, ab = _resolve_from_title(item, email)
                 if score >= 80 and u:
-                    s.title, s.url, s.year = t, u, y
+                    s.title, s.url, s.year, s.abstract = t, u, y, ab
                     s.source = f"openalex:{int(score)}"
                 else:
                     s.status = "warning"
@@ -347,7 +436,7 @@ def main() -> None:
                 f"{s.title} {notes}", cfg, fallback_display=user_category
             )
             s.marker, s.category_display = marker, display
-            s.description = _suggest_description(s.title, client, model, notes)
+            s.description = _suggest_description(s.title, s.abstract, client, model, notes)
 
     # Items eligible to be auto-added: resolved, not duplicate, have year + category
     to_add = [
