@@ -141,3 +141,34 @@ jobs:
               commit_title:  `chore: auto-merge paper updates (PR #${prNum})`,
             });
             console.log(`PR #${prNum} merged.`);
+
+      - name: Create release
+        if: steps.trust.outputs.verified == 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.PR_PAT }}
+          script: |
+            const prNum   = parseInt('${{ steps.find_pr.outputs.pr_number }}');
+            const branch  = context.payload.workflow_run.head_branch;
+            // Extract category from branch: auto-update/papers-<run_id>-<category>
+            const catMatch = branch.match(/^auto-update\/papers-\d+-(.+)$/);
+            const category = catMatch ? catMatch[1] : 'unknown';
+            const date     = new Date().toISOString().split('T')[0];
+            const tagName  = `papers/${date}-${category}`;
+
+            const { data: pr } = await github.rest.pulls.get({
+              owner:       context.repo.owner,
+              repo:        context.repo.repo,
+              pull_number: prNum,
+            });
+
+            await github.rest.repos.createRelease({
+              owner:      context.repo.owner,
+              repo:       context.repo.repo,
+              tag_name:   tagName,
+              name:       `Paper update: ${category} (${date})`,
+              body:       pr.data.body || '',
+              draft:      false,
+              prerelease: false,
+            });
+            console.log(`Release ${tagName} created.`);

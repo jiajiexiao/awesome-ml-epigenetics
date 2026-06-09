@@ -55,8 +55,10 @@ jobs:
             IDX=$(( (DOM <= 14 ? 0 : 1) % ${#CATEGORIES[@]} ))
             CAT="${CATEGORIES[$IDX]}"
           fi
+          DATE=$(date +%Y-%m-%d)
           echo "category=$CAT" >> "$GITHUB_OUTPUT"
           echo "branch=auto-update/papers-${{ github.run_id }}-$CAT" >> "$GITHUB_OUTPUT"
+          echo "date=$DATE" >> "$GITHUB_OUTPUT"
 
       - name: Run pipeline
         id: pipeline
@@ -94,13 +96,14 @@ jobs:
           token: ${{ secrets.PR_PAT }}
           commit-message: "chore: auto-update papers [${{ steps.shard.outputs.category }}] run-${{ github.run_id }}"
           branch: ${{ steps.shard.outputs.branch }}
-          title: "[Auto-update] New papers: ${{ steps.shard.outputs.category }}"
+          title: "[Auto-update] New papers: ${{ steps.shard.outputs.category }} (${{ steps.shard.outputs.date }})"
           body: |
             ## Automated paper discovery
 
             | Field | Value |
             |---|---|
             | **Category** | `${{ steps.shard.outputs.category }}` |
+            | **Date** | `${{ steps.shard.outputs.date }}` |
             | **Run ID** | `${{ github.run_id }}` |
             | **Date window** | last 90 days |
 

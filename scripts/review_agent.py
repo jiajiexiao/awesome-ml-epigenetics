@@ -307,7 +307,10 @@ def check_link_reachable(url: str) -> Tuple[bool, str]:
         ),
         "Accept": "text/html,application/xhtml+xml,*/*",
     }
+    # HEAD returns these for valid-but-blocked URLs; fall back to GET
     _HEAD_FALLBACK_CODES = {403, 405, 406, 501}
+    # These are the only codes that mean the URL genuinely doesn't exist
+    _ABSENT_CODES = {404, 410}
 
     try:
         resp = httpx.head(url, timeout=12, follow_redirects=True, headers=_HEADERS)
@@ -322,8 +325,13 @@ def check_link_reachable(url: str) -> Tuple[bool, str]:
             )
             if resp.status_code in (200, 206):
                 return True, ""
+            # 403 after GET = paywalled — content exists, access denied
+            if resp.status_code not in _ABSENT_CODES:
+                return True, ""
 
-        return False, f"HTTP {resp.status_code}: {url}"
+        if resp.status_code in _ABSENT_CODES:
+            return False, f"HTTP {resp.status_code} (not found): {url}"
+        return True, ""  # 4xx other than 404/410 = exists but restricted
     except httpx.TimeoutException:
         return False, f"Timeout fetching {url}"
     except Exception as e:
