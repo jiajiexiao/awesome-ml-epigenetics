@@ -27,7 +27,8 @@ body:
     id: category
     attributes:
       label: Category
-      description: Optional. If unknown, choose "Unsure" and the bot will suggest one.
+      description: Optional. Leave as "Unsure" and the bot will suggest one.
+      default: 0
       options:
         - Unsure
         - DNA Methylation
