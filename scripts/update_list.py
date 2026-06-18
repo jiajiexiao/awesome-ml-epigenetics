@@ -20,7 +20,7 @@ from typing import Dict, List, Set, Tuple
 import yaml
 from rapidfuzz import fuzz
 
-from scripts.schemas import CandidatePaper, Decision
+from scripts.schemas import CandidatePaper, Decision, extract_doi_from_url
 from scripts.http_client import make_async_client
 from scripts.review_agent import (
     _get_llm_client,
@@ -58,7 +58,15 @@ def parse_existing_entries(readme_text: str) -> Tuple[Set[str], Set[str], List[s
             urls.add(url_norm)
             doi_m = re.match(r"https://doi\.org/(.+)", url.strip(), re.I)
             if doi_m:
-                dois.add(doi_m.group(1).lower().rstrip("."))
+                # Strip preprint version suffix so doi.org and biorxiv URLs
+                # for the same preprint resolve to the same dedup key.
+                doi = re.sub(r"v\d+$", "", doi_m.group(1).lower().rstrip("."))
+                dois.add(doi)
+            else:
+                # Extract embedded DOI from biorxiv / medrxiv content URLs.
+                extracted = extract_doi_from_url(url)
+                if extracted:
+                    dois.add(extracted)
             t = re.sub(r"[^a-z0-9 ]", " ", raw_title.lower())
             t = re.sub(r"\s+", " ", t).strip()
             if len(t) > 10:
@@ -300,6 +308,13 @@ def process_category(
 
     client = _get_llm_client()
 
+    # Slugs of all categories — passed to LLM for primary-category judgment.
+    all_cat_slugs = [
+        ccfg.get("slug", name) for name, ccfg in cfg.get("categories", {}).items()
+    ]
+    cat_slug = cat_cfg.get("slug", cat_name)
+    boundary = cat_cfg.get("boundary", "")
+
     # Parse existing entries for dedup
     existing_urls, existing_dois, existing_titles = parse_existing_entries(readme_text)
 
@@ -327,7 +342,10 @@ def process_category(
     stage1_passed: List[CandidatePaper] = []
     for _, p in top:
         if client:
-            decision, rationale = stage1_llm_screen(p, cat_name, model, client, max_abstract_chars)
+            decision, rationale = stage1_llm_screen(
+                p, cat_slug, model, client, max_abstract_chars,
+                all_categories=all_cat_slugs, boundary=boundary,
+            )
             p.llm_vote = decision
             p.reviewer_rationale = rationale
         else:
@@ -374,7 +392,8 @@ def process_category(
             continue
 
         decision, rationale, suggested = stage2_deep_review(
-            p, cat_name, model, client, max_calls, max_section_chars
+            p, cat_slug, model, client, max_calls, max_section_chars,
+            all_categories=all_cat_slugs, boundary=boundary,
         )
         deep_count += 1
         p.deep_review_decision = decision

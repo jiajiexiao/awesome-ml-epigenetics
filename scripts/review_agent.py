@@ -97,17 +97,24 @@ Year: {year}
 Venue: {venue}
 Abstract (excerpt): {abstract}
 
+Category scope: {boundary}
+
+All available categories (pick exactly one as primary): {all_categories}
+
 Criteria for INCLUDE:
 1. ML / deep learning / statistical modelling is the CORE method (not just mentioned)
 2. Directly addresses epigenetics: DNA methylation, histone modifications, chromatin
    accessibility, liquid biopsy with epigenetic markers, or novel epigenetic assays
 3. Novel contribution (not a plain review/survey)
-4. Fits category: {category}
+4. **{category}** is the BEST PRIMARY home — not just a plausible fit
+
+If another category is clearly a better primary fit, set decision to "needs-review".
 
 Respond with ONLY this JSON (no other text):
 {{
   "decision": "include" | "exclude" | "needs-review",
   "score": <float 0-10>,
+  "primary_category": "<the single best-fit category slug from the list above>",
   "rationale": "<1 sentence naming the SPECIFIC model architecture (e.g. BERT, CNN, \
 XGBoost, random forest, VAE, transformer encoder) AND its precise epigenetics task \
 (e.g. 'XGBoost classifier for cfDNA fragmentomics-based cancer detection'). \
@@ -121,24 +128,39 @@ def stage1_llm_screen(
     model: str,
     client: Any,
     max_abstract_chars: int = 1200,
+    all_categories: Optional[List[str]] = None,
+    boundary: str = "",
 ) -> Tuple[Optional[Decision], str]:
     """Run Stage-1 LLM abstract screen. Returns (decision, rationale)."""
     abstract_excerpt = paper.abstract[:max_abstract_chars].strip() or "(no abstract)"
+    categories_text = ", ".join(all_categories) if all_categories else category
     prompt = _S1_USER.format(
         category=category,
         title=paper.title,
         year=paper.year,
         venue=paper.venue or "unknown",
         abstract=abstract_excerpt,
+        boundary=boundary or "No specific boundary defined.",
+        all_categories=categories_text,
     )
     raw = _llm_call(
         client, model,
         [{"role": "system", "content": _S1_SYSTEM}, {"role": "user", "content": prompt}],
-        max_tokens=256,
+        max_tokens=300,
     )
     if not raw:
         return None, "LLM unavailable"
-    return _parse_decision_json(raw)
+    decision, rationale = _parse_decision_json(raw)
+    # If the LLM thinks a different category is the primary fit, don't auto-include.
+    try:
+        data = json.loads(_extract_json(raw))
+        primary = str(data.get("primary_category", "")).strip().lower()
+        if primary and primary != category.lower() and decision == Decision.INCLUDE:
+            decision = Decision.NEEDS_REVIEW
+            rationale = f"[Better fit for '{primary}'] {rationale}"
+    except Exception:
+        pass
+    return decision, rationale
 
 
 # ── Stage 2: full-text deep review ───────────────────────────────────────────
@@ -156,6 +178,10 @@ Title: {title}
 Year: {year}
 Venue: {venue}
 
+Category scope: {boundary}
+
+All available categories (pick exactly one as primary): {all_categories}
+
 --- Extracted sections ---
 {sections_text}
 ---
@@ -164,14 +190,16 @@ Evaluate ALL of the following:
 1. Is ML/DL a CORE method (not just mentioned in passing)?
 2. Is the epigenetics connection DIRECT and substantial?
 3. Is there a NOVEL methodological or scientific contribution?
-4. Is the suggested category **{category}** the right fit?
+4. Is **{category}** the BEST PRIMARY home, not just a plausible fit?
 
-Only INCLUDE if all criteria are satisfied. Otherwise exclude or needs-review.
+Only INCLUDE if all criteria are satisfied. If another category is clearly a
+better primary fit, set decision to "needs-review".
 
 Respond with ONLY this JSON:
 {{
   "decision": "include" | "exclude" | "needs-review",
   "score": <float 0-10>,
+  "primary_category": "<the single best-fit category slug from the list above>",
   "rationale": "<2-3 sentences citing specific evidence from sections above>",
   "suggested_description": "<one sentence naming the EXACT model architecture \
 (BERT/CNN/XGBoost/VAE/transformer encoder/random forest/etc.) and the precise \
@@ -189,6 +217,8 @@ def stage2_deep_review(
     client: Any,
     max_calls: int = 4,
     max_section_chars: int = 2000,
+    all_categories: Optional[List[str]] = None,
+    boundary: str = "",
 ) -> Tuple[Optional[Decision], str, str]:
     """
     Run Stage-2 full-text deep review.
@@ -203,17 +233,20 @@ def stage2_deep_review(
     if max_calls - calls_used <= 0:
         return Decision.NEEDS_REVIEW, "Exceeded LLM call budget during summarisation", ""
 
+    categories_text = ", ".join(all_categories) if all_categories else category
     prompt = _S2_USER.format(
         category=category,
         title=paper.title,
         year=paper.year,
         venue=paper.venue or "unknown",
         sections_text=sections_text,
+        boundary=boundary or "No specific boundary defined.",
+        all_categories=categories_text,
     )
     raw = _llm_call(
         client, model,
         [{"role": "system", "content": _S2_SYSTEM}, {"role": "user", "content": prompt}],
-        max_tokens=400,
+        max_tokens=450,
     )
     if not raw:
         return None, "LLM unavailable for deep review", ""
@@ -223,6 +256,11 @@ def stage2_deep_review(
     try:
         data = json.loads(_extract_json(raw))
         suggested_desc = str(data.get("suggested_description", ""))
+        # Downgrade if LLM thinks another category is the primary fit.
+        primary = str(data.get("primary_category", "")).strip().lower()
+        if primary and primary != category.lower() and decision == Decision.INCLUDE:
+            decision = Decision.NEEDS_REVIEW
+            rationale = f"[Better fit for '{primary}'] {rationale}"
     except Exception:
         pass
     return decision, rationale, suggested_desc
