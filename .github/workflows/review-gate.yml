@@ -3,11 +3,9 @@ name: Review gate
 on:
   pull_request:
     branches: [main]
-    paths:
-      - 'README.md'
 
 # UNPRIVILEGED: no PR_PAT, no merge rights.
-# This job only reads and reports — it does not modify the repo.
+# This job runs on every PR and reports best-effort when fork tokens are read-only.
 permissions:
   contents: read
   issues: write
@@ -24,11 +22,25 @@ jobs:
       CI_REPORT_FILE: /tmp/ci_report.md
 
     steps:
-      - name: Checkout PR head (static analysis only — never execute PR code)
+      - name: Checkout trusted base checker
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.base.sha }}
           fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout PR README only
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: pr-head
+          sparse-checkout: README.md
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Use PR README for review
+        run: cp pr-head/README.md README.md
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v6
@@ -49,11 +61,8 @@ jobs:
         run: uv run python -m scripts.ci_checks --check README.md
         continue-on-error: true
 
-      - name: Run LLM grounded review (auto-update & issue PRs)
+      - name: Run LLM grounded review
         id: llm
-        if: >
-          contains(github.event.pull_request.labels.*.name, 'auto-update') ||
-          contains(github.event.pull_request.labels.*.name, 'from-issue')
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PYTHONPATH: ${{ github.workspace }}
@@ -72,7 +81,7 @@ jobs:
             const allPass = detPass && llmPass;
             const icon = allPass ? '✅' : '❌';
             const llmLabel = llmOutcome === 'skipped'
-              ? '⏭ Skipped (human PR — manual merge required)'
+              ? '⏭ Skipped'
               : (llmPass ? '✅ Pass' : '❌ Fail (PR left open for human review)');
 
             let details = '';
@@ -104,22 +113,26 @@ jobs:
               '<!-- bot:review-gate-pr -->',
               `## Review Gate ${icon}`, '', ...table, '', ...hints,
             ].join('\n');
-            const { data: prComments } = await github.rest.issues.listComments({
-              owner: context.repo.owner, repo: context.repo.repo, issue_number: prNum,
-            });
-            const prBot = prComments.find(
-              c => c.user.type === 'Bot' && c.body.includes('<!-- bot:review-gate-pr -->')
-            );
-            if (prBot) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner, repo: context.repo.repo,
-                comment_id: prBot.id, body: prBody,
+            try {
+              const { data: prComments } = await github.rest.issues.listComments({
+                owner: context.repo.owner, repo: context.repo.repo, issue_number: prNum,
               });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner, repo: context.repo.repo,
-                issue_number: prNum, body: prBody,
-              });
+              const prBot = prComments.find(
+                c => c.user.type === 'Bot' && c.body.includes('<!-- bot:review-gate-pr -->')
+              );
+              if (prBot) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner, repo: context.repo.repo,
+                  comment_id: prBot.id, body: prBody,
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner, repo: context.repo.repo,
+                  issue_number: prNum, body: prBody,
+                });
+              }
+            } catch (e) {
+              core.warning(`Could not update PR comment: ${e.message}`);
             }
 
             // ── Mirror the result back to the originating issue (from-issue PRs) ──
@@ -136,22 +149,26 @@ jobs:
               `## Review gate ${icon}`, '', verdict, '',
               ...(allPass ? [] : ['### 🔍 What to review', '', details || `_See the [run log](${runUrl})._`]),
             ].join('\n');
-            const { data: isComments } = await github.rest.issues.listComments({
-              owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNum,
-            });
-            const isBot = isComments.find(
-              c => c.user.type === 'Bot' && c.body.includes('<!-- bot:review-gate -->')
-            );
-            if (isBot) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner, repo: context.repo.repo,
-                comment_id: isBot.id, body: issueBody,
+            try {
+              const { data: isComments } = await github.rest.issues.listComments({
+                owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNum,
               });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner, repo: context.repo.repo,
-                issue_number: issueNum, body: issueBody,
-              });
+              const isBot = isComments.find(
+                c => c.user.type === 'Bot' && c.body.includes('<!-- bot:review-gate -->')
+              );
+              if (isBot) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner, repo: context.repo.repo,
+                  comment_id: isBot.id, body: issueBody,
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner, repo: context.repo.repo,
+                  issue_number: issueNum, body: issueBody,
+                });
+              }
+            } catch (e) {
+              core.warning(`Could not update originating issue comment: ${e.message}`);
             }
 
       - name: Fail the job if any check failed

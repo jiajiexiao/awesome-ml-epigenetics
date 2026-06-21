@@ -2,8 +2,8 @@ name: Propose paper updates
 
 on:
   schedule:
-    # Bi-weekly: 1st and 15th of each month at 06:00 UTC
-    - cron: '0 6 1,15 * *'
+    # Daily at 06:00 UTC; one category is selected per run.
+    - cron: '0 6 * * *'
   workflow_dispatch:
     inputs:
       category:
@@ -18,6 +18,8 @@ on:
 # Minimal permissions — PR_PAT is used only for the PR-creation step
 permissions:
   contents: read
+  issues: read
+  pull-requests: read
   models: read
 
 jobs:
@@ -66,36 +68,59 @@ jobs:
               exit 1
             fi
           else
-            # Scheduled or dispatch without explicit category: cycle through
-            # every category over successive runs (1st → half 0, 15th → half 1)
-            # so all categories — including datasets — get refreshed in rotation.
-            YEAR=$(date +%Y)
-            MONTH=$(date +%-m)
-            DOM=$(date +%-d)
-            HALF=$(( DOM <= 14 ? 0 : 1 ))
-            RUN_INDEX=$(( (YEAR * 12 + (MONTH - 1)) * 2 + HALF ))
-            IDX=$(( RUN_INDEX % ${#CATEGORIES[@]} ))
+            # Scheduled or dispatch without explicit category: cycle one category
+            # per UTC day so every category is refreshed weekly.
+            DAY_INDEX=$(( $(date -u +%s) / 86400 ))
+            IDX=$(( DAY_INDEX % ${#CATEGORIES[@]} ))
             CAT="${CATEGORIES[$IDX]}"
           fi
-          DATE=$(date +%Y-%m-%d)
+          DATE=$(date -u +%Y-%m-%d)
           echo "category=$CAT" >> "$GITHUB_OUTPUT"
           echo "branch=auto-update/papers-${RUN_ID}-$CAT" >> "$GITHUB_OUTPUT"
           echo "date=$DATE" >> "$GITHUB_OUTPUT"
 
+      - name: Check auto-update PR budget
+        id: budget
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          MAX_OPEN_AUTO_PRS=$(uv run python - <<'PY'
+          import yaml
+
+          with open("config.yml", encoding="utf-8") as f:
+              cfg = yaml.safe_load(f) or {}
+          print((cfg.get("sharding") or {}).get("max_open_auto_prs", 4))
+          PY
+          )
+          OPEN_AUTO_PRS=$(gh pr list --state open --label auto-update --json number --jq 'length')
+          echo "open_auto_prs=$OPEN_AUTO_PRS" >> "$GITHUB_OUTPUT"
+          echo "max_open_auto_prs=$MAX_OPEN_AUTO_PRS" >> "$GITHUB_OUTPUT"
+
+          if [ "$EVENT_NAME" = "schedule" ] && [ "$OPEN_AUTO_PRS" -ge "$MAX_OPEN_AUTO_PRS" ]; then
+            echo "can_open=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping discovery because $OPEN_AUTO_PRS auto-update PR(s) are already open (limit: $MAX_OPEN_AUTO_PRS)."
+          else
+            echo "can_open=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Run pipeline
         id: pipeline
+        if: steps.budget.outputs.can_open == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PYTHONPATH: ${{ github.workspace }}
         run: |
+          set +e
           DRY=""
           [ "${{ inputs.dry_run }}" = "true" ] && DRY="--dry-run"
           uv run python -m scripts.update_list --category "${{ steps.shard.outputs.category }}" $DRY
-          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
-        continue-on-error: true
+          EXIT_CODE=$?
+          set -e
+          echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
 
       - name: Upload candidates artifact
-        if: always()
+        if: steps.budget.outputs.can_open == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: candidates-${{ github.run_id }}-${{ steps.shard.outputs.category }}
@@ -146,3 +171,8 @@ jobs:
         if: steps.pipeline.outputs.exit_code == '2'
         run: |
           echo "::notice::Some papers passed Stage-1 but could not be auto-reviewed (no OA full text). Check the candidates artifact."
+
+      - name: Notify no accepted candidates
+        if: steps.pipeline.outputs.exit_code == '1'
+        run: |
+          echo "::notice::No accepted papers found for ${{ steps.shard.outputs.category }} in this run."

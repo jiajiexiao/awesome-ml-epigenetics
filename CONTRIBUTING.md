@@ -23,7 +23,7 @@ This document describes the architecture of the automated paper-discovery pipeli
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│  Scheduled GitHub Action (bi-weekly)                             │
+│  Scheduled GitHub Action (daily, one category per run)            │
 │                                                                  │
 │  ┌─────────────┐    ┌──────────────┐    ┌────────────────────┐  │
 │  │  Adapters   │───▶│  Rule-based  │───▶│  Stage-1 LLM       │  │
@@ -309,8 +309,9 @@ update_list.py  process_category()
 
 ### `propose-update.yml` — discovery & PR creation
 
-- **Triggers:** `schedule` (cron `0 6 1,15 * *`) and `workflow_dispatch`
-- **Shard logic:** day-of-month 1 → category index 0, day 15 → index 1; repeats cycling through all 7 categories over successive runs
+- **Triggers:** daily `schedule` (cron `0 6 * * *`) and `workflow_dispatch`
+- **Shard logic:** scheduled/default runs select one category by UTC day index, so all 7 categories are refreshed weekly
+- **PR budget:** skips scheduled discovery when `max_open_auto_prs` auto-update PRs are already open, preventing review queue spam
 - **`workflow_dispatch` inputs:**
   - `category` — override the auto-selected shard (e.g. `liquid-biopsy`)
   - `dry_run` — print proposals without writing files or opening a PR
@@ -329,13 +330,13 @@ update_list.py  process_category()
 - **Permissions:** `contents: write`, `issues: write`, `pull-requests: write`, `models: read`
 - The PR carries the `from-issue` label, so it flows through the same review-gate and auto-merge path as scheduled updates — and closes the originating issue on merge
 
-### `review-gate.yml` — CI on PRs touching README
+### `review-gate.yml` — PR CI
 
-- Runs on every PR that modifies `README.md`
+- Runs on every PR to `main`
 - **Unprivileged** — only `contents: read`, `issues: write`, `pull-requests: write`, `models: read`
 - Steps:
-  1. Deterministic checks (`--check`): format lint, dedup against `origin/main`, link reachability (HEAD request)
-  2. LLM grounded review (`--llm-review`): on PRs labeled `auto-update` **or** `from-issue`; verifies each new entry is genuinely relevant (judging relevance/accuracy only — never the publication year) — exits `1` if the LLM is unavailable (keeps PR open rather than auto-merging unreviewed)
+  1. Checks out trusted base scripts, overlays only the PR's `README.md`, then runs deterministic checks (`--check`): format lint, dedup against `origin/main` with same-PR removals excluded, link reachability (HEAD request)
+  2. LLM grounded review (`--llm-review`): verifies each new entry is genuinely relevant (judging relevance/accuracy only — never the publication year) — exits `1` if the LLM is unavailable (keeps PR open rather than auto-merging unreviewed)
   3. Upserts a summary comment on the PR. On failure it adds a **What to review** section with the concrete reasons (the failing format/dedup/link entries, or the LLM's flagged issues, written to `CI_REPORT_FILE` by `ci_checks.py`). For issue-sourced PRs (`issue-suggestion/<n>` branch) the same verdict and hints are mirrored back onto the originating issue.
 
 ### `auto-merge.yml` — privileged merge after gate passes
@@ -459,4 +460,4 @@ Format:
 - [Paper Title](https://doi.org/10.xxxx/xxxxx) (Year) - One-sentence description of the contribution.
 ```
 
-Opening a PR with such an entry will trigger `review-gate.yml`. Because the PR won't have the `auto-update` label, the LLM review step is skipped and the deterministic checks (format, dedup, link reachability) still run. Merge manually after those pass.
+Opening a PR with such an entry will trigger `review-gate.yml`; deterministic checks and the grounded LLM review both run. Merge manually after those pass.

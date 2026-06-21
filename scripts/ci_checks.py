@@ -41,22 +41,23 @@ def _append_report(lines: List[str]) -> None:
     with open(path, "a", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
 
-_ENTRY_LINE_RE = re.compile(r"^\+\s*-\s+\[.+?\]\(https?://[^\)]+\)")
+_ADDED_ENTRY_LINE_RE = re.compile(r"^\+\s*-\s+\[.+?\]\(https?://[^\)]+\)")
+_REMOVED_ENTRY_LINE_RE = re.compile(r"^-\s*-\s+\[.+?\]\(https?://[^\)]+\)")
 _URL_RE = re.compile(r"\]\((https?://[^\)]+)\)")
-_TITLE_RE = re.compile(r"^\+\s*-\s+\[([^\]]+)\]")
+_TITLE_RE = re.compile(r"^(?:[+-]\s*)?-\s+\[([^\]]+)\]")
 _YEAR_RE = re.compile(r"\((\d{4})[^\)]*\)")
 
 
 # ── Diff parsing ──────────────────────────────────────────────────────────────
 
-def get_new_entry_lines() -> List[str]:
-    """Return added markdown list entries from the current git diff vs. origin/main."""
+def _read_readme_diff() -> str:
+    """Return the current README diff vs. origin/main, or the staged diff fallback."""
     try:
         result = subprocess.run(
             ["git", "diff", "origin/main", "--", "README.md"],
             capture_output=True, text=True, check=True, cwd=ROOT,
         )
-        diff = result.stdout
+        return result.stdout
     except subprocess.CalledProcessError:
         # Fall back to staged diff
         try:
@@ -64,15 +65,26 @@ def get_new_entry_lines() -> List[str]:
                 ["git", "diff", "--cached", "--", "README.md"],
                 capture_output=True, text=True, check=True, cwd=ROOT,
             )
-            diff = result.stdout
+            return result.stdout
         except Exception:
-            return []
+            return ""
 
+def get_entry_diff_lines() -> Tuple[List[str], List[str]]:
+    """Return added and removed markdown list entries from the README diff."""
     new_lines: List[str] = []
-    for line in diff.splitlines():
-        if _ENTRY_LINE_RE.match(line):
+    removed_lines: List[str] = []
+    for line in _read_readme_diff().splitlines():
+        if _ADDED_ENTRY_LINE_RE.match(line):
             new_lines.append(line[1:].rstrip())  # strip leading '+' and trailing whitespace
+        elif _REMOVED_ENTRY_LINE_RE.match(line):
+            removed_lines.append(line[1:].rstrip())  # strip leading '-' and trailing whitespace
 
+    return new_lines, removed_lines
+
+
+def get_new_entry_lines() -> List[str]:
+    """Return added markdown list entries from the current git diff vs. origin/main."""
+    new_lines, _removed_lines = get_entry_diff_lines()
     return new_lines
 
 
@@ -91,13 +103,49 @@ def parse_entry_year(entry: str) -> int:
     return int(m.group(1)) if m else 0
 
 
+def _entry_to_candidate(entry: str) -> CandidatePaper:
+    """Build the minimal paper record needed for duplicate checks."""
+    return CandidatePaper(
+        title=parse_entry_title(entry),
+        url=parse_entry_url(entry),
+        year=parse_entry_year(entry),
+        source="ci_check",
+        pub_type=PubType.UNKNOWN,
+    )
+
+
+def _remove_one_title(existing_titles: List[str], title: str) -> List[str]:
+    removed = False
+    kept: List[str] = []
+    for existing in existing_titles:
+        if not removed and existing == title:
+            removed = True
+            continue
+        kept.append(existing)
+    return kept
+
+
+def _dedup_baseline(readme_text: str, removed_entries: List[str]) -> Tuple[set, set, List[str]]:
+    """Parse the base README, excluding entries removed by this PR."""
+    from scripts.update_list import parse_existing_entries
+
+    existing_urls, existing_dois, existing_titles = parse_existing_entries(readme_text)
+    for entry in removed_entries:
+        paper = _entry_to_candidate(entry)
+        if paper.normalized_url:
+            existing_urls.discard(paper.normalized_url)
+        if paper.normalized_doi:
+            existing_dois.discard(paper.normalized_doi)
+        if paper.normalized_title:
+            existing_titles = _remove_one_title(existing_titles, paper.normalized_title)
+    return existing_urls, existing_dois, existing_titles
+
+
 # ── Deterministic checks ──────────────────────────────────────────────────────
 
 def run_deterministic_checks(readme_path: Path) -> Tuple[bool, List[str]]:
     """Check format, dedup, and link reachability for all new entries."""
-    from scripts.update_list import parse_existing_entries
-
-    new_entries = get_new_entry_lines()
+    new_entries, removed_entries = get_entry_diff_lines()
     if not new_entries:
         print("[CI] No new entries detected — nothing to check.")
         return True, []
@@ -106,7 +154,7 @@ def run_deterministic_checks(readme_path: Path) -> Tuple[bool, List[str]]:
 
     # Parse baseline (base branch) for dedup
     base_readme = _get_base_readme()
-    existing_urls, existing_dois, existing_titles = parse_existing_entries(base_readme)
+    existing_urls, existing_dois, existing_titles = _dedup_baseline(base_readme, removed_entries)
 
     failures: List[str] = []
 
@@ -117,22 +165,14 @@ def run_deterministic_checks(readme_path: Path) -> Tuple[bool, List[str]]:
             failures.append(f"[format] {msg}")
             continue
 
-        url = parse_entry_url(entry)
-        title = parse_entry_title(entry)
-        year = parse_entry_year(entry)
-
-        # Build minimal CandidatePaper for dedup check
-        paper = CandidatePaper(
-            title=title, url=url, year=year, source="ci_check",
-            pub_type=PubType.UNKNOWN,
-        )
+        paper = _entry_to_candidate(entry)
 
         ok, msg = check_no_duplicate(paper, existing_urls, existing_dois, existing_titles)
         if not ok:
             failures.append(f"[dedup] {msg}")
             continue
 
-        ok, msg = check_link_reachable(url)
+        ok, msg = check_link_reachable(paper.url)
         if not ok:
             failures.append(f"[link] {msg}")
 
