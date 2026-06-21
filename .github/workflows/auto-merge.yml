@@ -6,7 +6,7 @@ on:
     types: [completed]
 
 # Privileged — uses PR_PAT to merge.
-# Runs for the bi-weekly auto-update branches and issue-sourced suggestion PRs.
+# Runs for scheduled auto-update branches and issue-sourced suggestion PRs.
 permissions:
   contents: write
   pull-requests: write
