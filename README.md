@@ -88,7 +88,7 @@ A curated list of "awesome" machine learning resources, datasets, and papers in 
 ### Novel Epigenetic Assays
 <!-- AUTO-PAPERS:NOVEL_ASSAYS START -->
 - [Multimodal cell-free DNA whole-genome TAPS is sensitive and reveals specific cancer signals](https://www.nature.com/articles/s41467-024-55428-y) (2025) - Deep and less destructive assay than bisulfite sequencing.
-- [Enzymatic methyl sequencing detects DNA methylation at single-base resolution from picograms of DNA](https://www.nature.com/articles/s41592-021-01103-7) (2021) - Enzymatic methyl sequencing.
+- [Enzymatic methyl sequencing detects DNA methylation at single-base resolution from picograms of DNA](https://pmc.ncbi.nlm.nih.gov/articles/PMC8256858/) (2021) - Enzymatic methyl sequencing.
 - [scNMT-seq: Single-cell nucleosome, methylation and transcription sequencing](https://www.nature.com/articles/s41467-018-03149-4) (2018) - Single-cell nucleosome, methylation and transcription sequencing.
 - [DNA methylation detection: Bisulfite genomic sequencing analysis](https://link.springer.com/protocol/10.1007/978-1-61779-316-5_2) (2011) - Background of bisulfite sequencing. Also check [Bisulfite_sequencing](https://en.wikipedia.org/wiki/Bisulfite_sequencing) and [Reduced representation bisulfite sequencing](https://en.wikipedia.org/wiki/Reduced_representation_bisulfite_sequencing) on Wiki.
 <!-- AUTO-PAPERS:NOVEL_ASSAYS END -->
