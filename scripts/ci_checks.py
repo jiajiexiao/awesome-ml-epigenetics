@@ -141,6 +141,21 @@ def _dedup_baseline(readme_text: str, removed_entries: List[str]) -> Tuple[set, 
     return existing_urls, existing_dois, existing_titles
 
 
+def _entries_requiring_llm_review(new_entries: List[str], removed_entries: List[str]) -> List[str]:
+    """Return genuinely new entries, ignoring same-title replacements/moves."""
+    removed_titles = set()
+    for entry in removed_entries:
+        title = _entry_to_candidate(entry).normalized_title
+        if title:
+            removed_titles.add(title)
+
+    filtered = []
+    for entry in new_entries:
+        if _entry_to_candidate(entry).normalized_title not in removed_titles:
+            filtered.append(entry)
+    return filtered
+
+
 # ── Deterministic checks ──────────────────────────────────────────────────────
 
 def run_deterministic_checks(readme_path: Path) -> Tuple[bool, List[str]]:
@@ -243,10 +258,11 @@ Respond with ONLY this JSON:
 
 
 def run_llm_review(readme_path: Path) -> Tuple[bool, List[str]]:
-    """Run Stage-1 LLM verification on new entries."""
-    new_entries = get_new_entry_lines()
+    """Run Stage-1 LLM verification on genuinely new entries."""
+    new_entries, removed_entries = get_entry_diff_lines()
+    new_entries = _entries_requiring_llm_review(new_entries, removed_entries)
     if not new_entries:
-        print("[CI/LLM] No new entries — skipping LLM review.")
+        print("[CI/LLM] No new entries requiring LLM review — skipping.")
         return True, []
 
     client = _get_llm_client()
