@@ -154,6 +154,9 @@ uv run python -m scripts.update_list --category liquid-biopsy --dry-run
 # Run all categories in dry-run mode
 uv run python -m scripts.update_list --all-categories --dry-run
 
+# Dry-run a historical backfill in yearly chunks; skip bioRxiv if its broad date endpoint stalls
+uv run python -m scripts.update_list --category dna-methylation --from-date 2010-01-01 --yearly-backfill --exclude-source biorxiv --dry-run
+
 # Actually update README.md (writes the file)
 uv run python -m scripts.update_list --category dna-methylation
 
@@ -216,6 +219,16 @@ All tunable parameters live in `config.yml`. Key sections:
 | `email` | `auto-update@…` | Passed to polite-pool APIs (OpenAlex, Unpaywall). Change to your own. |
 | `date_window_days` | `90` | How many days back to search for new papers. |
 | `max_raw_results_per_term` | `25` | Results fetched per search term per source before dedup. |
+
+For one-off historical sweeps, prefer CLI overrides instead of changing `config.yml`:
+
+```bash
+uv run python -m scripts.update_list --category dna-methylation --from-date 2010-01-01 --yearly-backfill --max-raw-results-per-term 50 --exclude-source biorxiv --dry-run
+```
+
+`--yearly-backfill` splits the selected date range into calendar-year windows and searches newest windows first. This reduces misses from API result caps and prefers newer peer-reviewed records over older preprints when both describe the same work.
+
+Use `--exclude-source biorxiv` when the broad bioRxiv date-range endpoint is slow or hanging. OpenAlex often indexes bioRxiv records too, so this is a practical first pass; rerun a narrower recent window without the exclusion if you specifically want bioRxiv-only coverage.
 
 ### `sources`
 
@@ -316,6 +329,18 @@ update_list.py  process_category()
   - `category` — override the auto-selected shard (e.g. `liquid-biopsy`)
   - `dry_run` — print proposals without writing files or opening a PR
 - **Artifact:** `candidates.json` is uploaded for every run (14-day retention) — useful for debugging which papers were seen
+
+### `historical-backfill.yml` — manual historical sweep
+
+- **Triggers:** manual `workflow_dispatch` only
+- **Scope:** one selected category by default; `all` is available for short ranges or quota-planned sweeps
+- **Date range:** `from_date` is required, `to_date` defaults to the current date
+- **Chunking:** always passes `--yearly-backfill`, so the pipeline searches calendar-year windows newest-first rather than one broad query
+- **Quota controls:** dispatch inputs override raw API results, Stage-1 LLM candidates, and Stage-2 full-text reviews per category/year window
+- **Source controls:** `exclude_sources` defaults to `biorxiv` because the broad bioRxiv date endpoint can stall on historical windows; clear it to include every source
+- **Default safety:** `dry_run` defaults to `true`; rerun with `dry_run=false` to open a PR after inspecting the artifact
+- **PR behavior:** accepted entries open a `manual-backfill/papers-*` PR labeled `needs-human-review`, so maintainers review and merge it manually after `review-gate` passes
+- **Artifact:** `candidates.json` is uploaded for 30 days, including papers that need human review because no free full text was found
 
 ### `issue-triage.yml` — paper suggestions from issues → PR
 

@@ -1,0 +1,279 @@
+name: Historical paper backfill
+
+on:
+  workflow_dispatch:
+    inputs:
+      category:
+        description: 'Category to backfill. Use all only for short ranges or quota-planned sweeps.'
+        type: choice
+        required: true
+        default: dna-methylation
+        options:
+          - dna-methylation
+          - histone-modifications
+          - chromatin-accessibility
+          - multi-omics
+          - liquid-biopsy
+          - novel-assays
+          - datasets
+          - all
+      from_date:
+        description: 'Earliest publication date to search (YYYY-MM-DD)'
+        required: true
+        default: '2010-01-01'
+      to_date:
+        description: 'Latest publication date to search (YYYY-MM-DD). Leave empty for today.'
+        required: false
+        default: ''
+      dry_run:
+        description: 'Dry run: upload candidates without opening a PR'
+        type: boolean
+        default: true
+      max_raw_results_per_term:
+        description: 'API results per search term/source/year window'
+        required: true
+        default: '50'
+      max_llm_candidates_per_window:
+        description: 'Stage-1 LLM candidates per category/year window'
+        required: true
+        default: '5'
+      max_deep_reviews_per_window:
+        description: 'Stage-2 full-text reviews per category/year window'
+        required: true
+        default: '1'
+      exclude_sources:
+        description: 'Comma-separated discovery sources to skip; clear to include every source'
+        required: false
+        default: 'biorxiv'
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+  models: read
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Validate inputs
+        id: backfill_inputs
+        env:
+          INPUT_CATEGORY: ${{ inputs.category }}
+          INPUT_FROM_DATE: ${{ inputs.from_date }}
+          INPUT_TO_DATE: ${{ inputs.to_date }}
+          INPUT_MAX_RAW: ${{ inputs.max_raw_results_per_term }}
+          INPUT_MAX_LLM: ${{ inputs.max_llm_candidates_per_window }}
+          INPUT_MAX_DEEP: ${{ inputs.max_deep_reviews_per_window }}
+          INPUT_EXCLUDE_SOURCES: ${{ inputs.exclude_sources }}
+        run: |
+          uv run python - <<'PY'
+          import os
+          import sys
+          from datetime import date
+          from pathlib import Path
+
+          categories = {
+              "dna-methylation",
+              "histone-modifications",
+              "chromatin-accessibility",
+              "multi-omics",
+              "liquid-biopsy",
+              "novel-assays",
+              "datasets",
+              "all",
+          }
+
+          category = os.environ["INPUT_CATEGORY"].strip()
+          if category not in categories:
+              sys.exit(f"Unknown category: {category}")
+
+          try:
+              from_date = date.fromisoformat(os.environ["INPUT_FROM_DATE"].strip())
+          except ValueError:
+              sys.exit("from_date must be YYYY-MM-DD")
+
+          raw_to_date = os.environ["INPUT_TO_DATE"].strip()
+          try:
+              to_date = date.fromisoformat(raw_to_date) if raw_to_date else date.today()
+          except ValueError:
+              sys.exit("to_date must be YYYY-MM-DD when provided")
+
+          if from_date > to_date:
+              sys.exit("from_date must be on or before to_date")
+
+          def positive_int(name: str) -> int:
+              try:
+                  value = int(os.environ[name])
+              except ValueError:
+                  sys.exit(f"{name} must be a positive integer")
+              if value < 1:
+                  sys.exit(f"{name} must be a positive integer")
+              return value
+
+          max_raw = positive_int("INPUT_MAX_RAW")
+          max_llm = positive_int("INPUT_MAX_LLM")
+          max_deep = positive_int("INPUT_MAX_DEEP")
+          discovery_sources = {"openalex", "europepmc", "pubmed", "arxiv", "biorxiv"}
+          exclude_sources = [
+              source.strip().lower()
+              for source in os.environ["INPUT_EXCLUDE_SOURCES"].split(",")
+              if source.strip()
+          ]
+          invalid_sources = [
+              source for source in exclude_sources if source not in discovery_sources
+          ]
+          if invalid_sources:
+              sys.exit(
+                  "Unknown exclude_sources value(s): "
+                  + ", ".join(invalid_sources)
+                  + "; expected one of: "
+                  + ", ".join(sorted(discovery_sources))
+              )
+
+          output_path = Path(os.environ["GITHUB_OUTPUT"])
+          with output_path.open("a", encoding="utf-8") as output:
+              output.write(f"category={category}\n")
+              output.write(f"from_date={from_date.isoformat()}\n")
+              output.write(f"to_date={to_date.isoformat()}\n")
+              output.write(f"max_raw={max_raw}\n")
+              output.write(f"max_llm={max_llm}\n")
+              output.write(f"max_deep={max_deep}\n")
+              output.write(f"exclude_sources={','.join(exclude_sources)}\n")
+          PY
+
+      - name: Run historical backfill
+        id: pipeline
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PYTHONPATH: ${{ github.workspace }}
+          CATEGORY: ${{ steps.backfill_inputs.outputs.category }}
+          FROM_DATE: ${{ steps.backfill_inputs.outputs.from_date }}
+          TO_DATE: ${{ steps.backfill_inputs.outputs.to_date }}
+          MAX_RAW: ${{ steps.backfill_inputs.outputs.max_raw }}
+          MAX_LLM: ${{ steps.backfill_inputs.outputs.max_llm }}
+          MAX_DEEP: ${{ steps.backfill_inputs.outputs.max_deep }}
+          EXCLUDE_SOURCES: ${{ steps.backfill_inputs.outputs.exclude_sources }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set +e
+          SELECTOR=()
+          if [ "$CATEGORY" = "all" ]; then
+            SELECTOR=(--all-categories)
+          else
+            SELECTOR=(--category "$CATEGORY")
+          fi
+
+          DRY=()
+          if [ "$DRY_RUN" = "true" ]; then
+            DRY=(--dry-run)
+          fi
+          EXCLUDES=()
+          if [ -n "$EXCLUDE_SOURCES" ]; then
+            EXCLUDES=(--exclude-source "$EXCLUDE_SOURCES")
+          fi
+
+          uv run python -m scripts.update_list \
+            "${SELECTOR[@]}" \
+            --from-date "$FROM_DATE" \
+            --to-date "$TO_DATE" \
+            --yearly-backfill \
+            --max-raw-results-per-term "$MAX_RAW" \
+            --max-llm-candidates-per-run "$MAX_LLM" \
+            --max-deep-reviews-per-run "$MAX_DEEP" \
+            "${EXCLUDES[@]}" \
+            "${DRY[@]}"
+          EXIT_CODE=$?
+          echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+          if [ "$EXIT_CODE" -gt 2 ]; then
+            exit "$EXIT_CODE"
+          fi
+
+      - name: Upload candidates artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: historical-candidates-${{ github.run_id }}-${{ steps.backfill_inputs.outputs.category }}
+          path: candidates.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Check for README changes
+        id: changes
+        if: steps.pipeline.outputs.exit_code == '0'
+        run: |
+          git diff --quiet README.md && echo "has_changes=false" >> "$GITHUB_OUTPUT" \
+                                     || echo "has_changes=true"  >> "$GITHUB_OUTPUT"
+
+      - name: Create pull request
+        if: |
+          steps.changes.outputs.has_changes == 'true' &&
+          inputs.dry_run != 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.PR_PAT }}
+          commit-message: "chore: backfill historical papers [${{ steps.backfill_inputs.outputs.category }}] run-${{ github.run_id }}"
+          branch: manual-backfill/papers-${{ github.run_id }}-${{ steps.backfill_inputs.outputs.category }}
+          title: "[Backfill] Historical papers: ${{ steps.backfill_inputs.outputs.category }} (${{ steps.backfill_inputs.outputs.from_date }} to ${{ steps.backfill_inputs.outputs.to_date }})"
+          body: |
+            ## Historical paper backfill
+
+            | Field | Value |
+            |---|---|
+            | **Scope** | `${{ steps.backfill_inputs.outputs.category }}` |
+            | **Date range** | `${{ steps.backfill_inputs.outputs.from_date }}` to `${{ steps.backfill_inputs.outputs.to_date }}` |
+            | **Chunking** | Calendar-year windows, searched newest first |
+            | **Run ID** | `${{ github.run_id }}` |
+            | **Max raw results / term** | `${{ steps.backfill_inputs.outputs.max_raw }}` |
+            | **Max Stage-1 candidates / window** | `${{ steps.backfill_inputs.outputs.max_llm }}` |
+            | **Max Stage-2 reviews / window** | `${{ steps.backfill_inputs.outputs.max_deep }}` |
+            | **Excluded sources** | `${{ steps.backfill_inputs.outputs.exclude_sources || 'none' }}` |
+
+            This PR was created by a manual historical sweep. Review the diff and the
+            uploaded [candidates artifact](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            before merging.
+
+            Papers were included only after passing:
+            1. Rule-based keyword screening
+            2. LLM Stage-1 abstract review (both voters must agree)
+            3. LLM Stage-2 full-text deep review (OA papers only)
+
+            Paywalled papers with no free version are not in this PR; they appear in
+            the candidates artifact as `needs-human-review`.
+
+            > The review-gate CI check must pass before this PR is merged manually.
+          labels: needs-human-review
+          delete-branch: true
+
+      - name: Notify dry-run results
+        if: steps.pipeline.outputs.exit_code == '0' && inputs.dry_run == 'true'
+        run: |
+          echo "::notice::Historical backfill found accepted candidates. Download the candidates artifact or rerun with dry_run=false to open a PR."
+
+      - name: Notify needs-human-review items
+        if: steps.pipeline.outputs.exit_code == '2'
+        run: |
+          echo "::notice::Some papers passed Stage-1 but could not be auto-reviewed. Check the candidates artifact."
+
+      - name: Notify no accepted candidates
+        if: steps.pipeline.outputs.exit_code == '1'
+        run: |
+          echo "::notice::No accepted papers found for the historical backfill scope."

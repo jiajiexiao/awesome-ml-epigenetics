@@ -2,9 +2,10 @@
 """update_list.py — paper discovery and README update orchestrator.
 
 Usage (always run from project root):
-  python -m scripts.update_list --category dna-methylation [--dry-run]
-  python -m scripts.update_list --all-categories [--dry-run]
-  python -m scripts.update_list --category liquid-biopsy --config config.yml
+    python -m scripts.update_list --category dna-methylation [--dry-run]
+    python -m scripts.update_list --all-categories [--dry-run]
+    python -m scripts.update_list --all-categories --from-date 2010-01-01 --yearly-backfill [--dry-run]
+    python -m scripts.update_list --category liquid-biopsy --config config.yml
 """
 from __future__ import annotations
 
@@ -41,6 +42,99 @@ CANDIDATES_OUT = ROOT / "candidates.json"
 def load_config(path: str) -> dict:
     with open(path) as f:
         return yaml.safe_load(f)
+
+
+def _parse_iso_date(value: str) -> date:
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("expected date in YYYY-MM-DD format") from exc
+
+
+def _positive_int(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("expected a positive integer") from exc
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("expected a positive integer")
+    return parsed
+
+
+_DISCOVERY_SOURCES = ("openalex", "europepmc", "pubmed", "arxiv", "biorxiv")
+
+
+def _parse_source_list(value: str) -> List[str]:
+    sources = [part.strip().lower() for part in value.split(",") if part.strip()]
+    invalid = [source for source in sources if source not in _DISCOVERY_SOURCES]
+    if invalid:
+        allowed = ", ".join(_DISCOVERY_SOURCES)
+        raise argparse.ArgumentTypeError(
+            f"unknown source(s): {', '.join(invalid)}; expected one of: {allowed}"
+        )
+    if not sources:
+        raise argparse.ArgumentTypeError("expected at least one source")
+    return sources
+
+
+def _flatten_source_args(values: List[List[str]] | None) -> List[str]:
+    return [source for group in values or [] for source in group]
+
+
+def _apply_source_overrides(
+    cfg: dict,
+    include_sources: List[str],
+    exclude_sources: List[str],
+) -> None:
+    sources_cfg = cfg.setdefault("sources", {})
+
+    if include_sources:
+        include_set = set(include_sources)
+        for source in _DISCOVERY_SOURCES:
+            sources_cfg[source] = source in include_set
+
+    for source in exclude_sources:
+        sources_cfg[source] = False
+
+
+def _enabled_discovery_sources(cfg: dict) -> List[str]:
+    sources_cfg = cfg.get("sources", {})
+    return [source for source in _DISCOVERY_SOURCES if sources_cfg.get(source, True)]
+
+
+def _resolve_date_range(
+    cfg: dict,
+    from_date_arg: date | None = None,
+    to_date_arg: date | None = None,
+    date_window_days: int | None = None,
+) -> Tuple[str, str]:
+    to_date = to_date_arg or date.today()
+    if from_date_arg:
+        from_date = from_date_arg
+    else:
+        days = date_window_days or cfg["discovery"]["date_window_days"]
+        from_date = to_date - timedelta(days=days)
+
+    if from_date > to_date:
+        raise ValueError("from-date must be on or before to-date")
+
+    return from_date.isoformat(), to_date.isoformat()
+
+
+def _yearly_date_ranges(from_date: str, to_date: str) -> List[Tuple[str, str]]:
+    start = date.fromisoformat(from_date)
+    end = date.fromisoformat(to_date)
+    ranges: List[Tuple[str, str]] = []
+
+    cursor = start
+    while cursor <= end:
+        chunk_end = min(date(cursor.year, 12, 31), end)
+        ranges.append((cursor.isoformat(), chunk_end.isoformat()))
+        cursor = chunk_end + timedelta(days=1)
+
+    # Search newest windows first so a peer-reviewed version is preferred over
+    # an older preprint when the same work appears in multiple years.
+    return list(reversed(ranges))
 
 
 # ── README parsing ────────────────────────────────────────────────────────────
@@ -282,14 +376,16 @@ def process_category(
     cfg: dict,
     readme_text: str,
     dry_run: bool = False,
+    from_date: str | None = None,
+    to_date: str | None = None,
+    date_window_days: int | None = None,
 ) -> Tuple[str, List[CandidatePaper], List[CandidatePaper]]:
     """
     Run the full pipeline for one category.
     Returns (updated_readme_text, accepted_papers, needs_review_papers).
     """
-    days = cfg["discovery"]["date_window_days"]
-    from_date = (date.today() - timedelta(days=days)).isoformat()
-    to_date = date.today().isoformat()
+    if from_date is None or to_date is None:
+        from_date, to_date = _resolve_date_range(cfg, date_window_days=date_window_days)
 
     marker = cat_cfg["readme_marker"]
     keywords = cat_cfg["keywords"]
@@ -413,13 +509,16 @@ def process_category(
 
     # Inject into README sub-block
     updated_readme = readme_text
-    if accepted and not dry_run:
+    new_entries: List[str] = []
+    if accepted:
         new_entries = [render_entry(p) for p in accepted]
+        # Even in dry-run mode, return the hypothetical README text so later
+        # date chunks deduplicate against papers accepted earlier in this run.
         updated_readme = inject_entries(readme_text, marker, new_entries)
-    elif accepted and dry_run:
+    if accepted and dry_run:
         print(f"[{cat_name}] DRY-RUN — would add:")
-        for p in accepted:
-            print(f"  {render_entry(p)}")
+        for entry in new_entries:
+            print(f"  {entry}")
 
     return updated_readme, accepted, needs_review
 
@@ -433,13 +532,88 @@ def main() -> None:
     parser.add_argument("--all-categories", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument(
+        "--from-date",
+        type=_parse_iso_date,
+        help="Earliest publication date to search (YYYY-MM-DD)",
+    )
+    parser.add_argument(
+        "--to-date",
+        type=_parse_iso_date,
+        help="Latest publication date to search (YYYY-MM-DD; default: today)",
+    )
+    parser.add_argument(
+        "--date-window-days",
+        type=_positive_int,
+        help="Override config discovery.date_window_days",
+    )
+    parser.add_argument(
+        "--yearly-backfill",
+        action="store_true",
+        help="Split the selected date range into calendar-year chunks to reduce API result-cap misses.",
+    )
+    parser.add_argument(
+        "--max-raw-results-per-term",
+        type=_positive_int,
+        help="Override config discovery.max_raw_results_per_term for this run.",
+    )
+    parser.add_argument(
+        "--max-llm-candidates-per-run",
+        type=_positive_int,
+        help="Override llm.max_llm_candidates_per_run for each category/date window.",
+    )
+    parser.add_argument(
+        "--max-deep-reviews-per-run",
+        type=_positive_int,
+        help="Override llm.max_deep_reviews_per_day for each category/date window.",
+    )
+    parser.add_argument(
+        "--include-source",
+        action="append",
+        type=_parse_source_list,
+        metavar="SOURCE[,SOURCE...]",
+        help="Limit discovery to one or more sources (repeatable).",
+    )
+    parser.add_argument(
+        "--exclude-source",
+        action="append",
+        type=_parse_source_list,
+        metavar="SOURCE[,SOURCE...]",
+        help="Disable one or more discovery sources for this run (repeatable).",
+    )
+    parser.add_argument(
         "--sort",
         action="store_true",
         help="Re-sort every AUTO-PAPERS block by year (newest first) and exit.",
     )
     args = parser.parse_args()
 
+    if args.from_date and args.date_window_days:
+        parser.error("--from-date cannot be combined with --date-window-days")
+
     cfg = load_config(args.config)
+    if args.max_raw_results_per_term:
+        cfg["discovery"]["max_raw_results_per_term"] = args.max_raw_results_per_term
+    if args.max_llm_candidates_per_run:
+        cfg.setdefault("llm", {})["max_llm_candidates_per_run"] = args.max_llm_candidates_per_run
+    if args.max_deep_reviews_per_run:
+        cfg.setdefault("llm", {})["max_deep_reviews_per_day"] = args.max_deep_reviews_per_run
+    _apply_source_overrides(
+        cfg,
+        _flatten_source_args(args.include_source),
+        _flatten_source_args(args.exclude_source),
+    )
+    enabled_sources = _enabled_discovery_sources(cfg)
+    if not enabled_sources:
+        parser.error("at least one discovery source must be enabled")
+    print(f"Discovery sources: {', '.join(enabled_sources)}")
+
+    try:
+        run_from_date, run_to_date = _resolve_date_range(
+            cfg, args.from_date, args.to_date, args.date_window_days
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
+
     readme_text = README_PATH.read_text(encoding="utf-8")
     all_categories: Dict[str, dict] = cfg.get("categories", {})
 
@@ -468,13 +642,25 @@ def main() -> None:
         sys.exit(1)
 
     all_candidates: List[CandidatePaper] = []
+    date_ranges = (
+        _yearly_date_ranges(run_from_date, run_to_date)
+        if args.yearly_backfill
+        else [(run_from_date, run_to_date)]
+    )
 
     for cat_name, cat_cfg in cats:
-        readme_text, accepted, needs_review = process_category(
-            cat_name, cat_cfg, cfg, readme_text, dry_run=args.dry_run
-        )
-        all_candidates.extend(accepted)
-        all_candidates.extend(needs_review)
+        for range_from, range_to in date_ranges:
+            readme_text, accepted, needs_review = process_category(
+                cat_name,
+                cat_cfg,
+                cfg,
+                readme_text,
+                dry_run=args.dry_run,
+                from_date=range_from,
+                to_date=range_to,
+            )
+            all_candidates.extend(accepted)
+            all_candidates.extend(needs_review)
 
     # Write updated README (only if not dry-run and something was accepted)
     accepted_count = sum(1 for p in all_candidates if not p.needs_human_review)

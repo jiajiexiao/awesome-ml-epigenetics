@@ -128,6 +128,8 @@ To re-run the bot after editing your issue, comment **`/triage`** (optionally fo
 
 New papers are discovered and proposed automatically twice a month via a GitHub Actions pipeline, which rotates through every category (including Datasets) over successive runs. The bot searches OpenAlex, Europe PMC, PubMed, arXiv, and bioRxiv, then screens candidates through rule-based scoring and a two-stage LLM review before opening a pull request. Each section's entries live between `<!-- AUTO-PAPERS:… START -->` and `<!-- AUTO-PAPERS:… END -->` comments; the bot keeps the whole section sorted newest-first (Datasets alphabetically) on every update and never removes hand-added entries.
 
+Maintainers can also run the manual **Historical paper backfill** workflow when they want to search older publication windows. It scans calendar-year chunks, skips the slow bioRxiv date endpoint by default, uploads a `candidates.json` artifact, and opens a `needs-human-review` pull request only when accepted historical entries are found.
+
 ### Manual contributions
 
 To add a resource yourself, open a pull request adding your entry **anywhere between** the `<!-- AUTO-PAPERS:… START -->` and `<!-- AUTO-PAPERS:… END -->` markers of the relevant section — position doesn't matter, the bot re-sorts each section newest-first (Datasets alphabetically) and won't drop your entry. The review-gate CI will run format, dedup, and link-reachability checks automatically.
