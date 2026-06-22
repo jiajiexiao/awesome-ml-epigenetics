@@ -62,6 +62,7 @@ A curated list of "awesome" machine learning resources, datasets, and papers in 
 
 ### Liquid Biopsy
 <!-- AUTO-PAPERS:LIQUID_BIOPSY START -->
+- [A machine learning framework combining cfDNA fragmentomics and serum biomarkers for early ovarian cancer detection](https://doi.org/10.1186/s12964-026-02908-x) (2026) - Stacked machine-learning model integrating cfDNA fragmentomics and serum biomarkers CA125 and HE4 for early ovarian cancer detection, achieving AUC 0.968.
 - [cfDECOR: a novel approach for estimating cell type contributions to cfDNA based on chromatin accessibility patterns](https://doi.org/10.1038/s41598-026-50180-3) (2026) - cfDECOR deconvolution model for predicting cell type contributions to cfDNA based on chromatin accessibility patterns, enhancing disease detection sensitivity.
 - [Epigenetic Instability-Based Metrics in Cell-Free DNA for Early Cancer Detection.](https://doi.org/10.1158/1078-0432.CCR-25-3384) (2026) - Random forest classifier using the epigenetic instability index (EII) for cfDNA-based early cancer detection, achieving 81% sensitivity at 95% specificity for stage IA lung adenocarcinoma.
 - [Learning Extremely Sparse Signals in High-Dimensional Cell-Free DNA Data Using Modern Hopfield Attention for Colorectal Cancer Detection](https://openreview.net/forum?id=tCYH1EdShW) (2026) - Fragment-Level Deep Learning uses Modern Hopfield Networks to identify extremely sparse tumor signal in cell-free DNA for colorectal cancer detection under a multiple-instance-learning setting.
