@@ -83,6 +83,7 @@ A curated list of "awesome" machine learning resources, datasets, and papers in 
 - [The cell-free DNA methylome captures distinctions between localized and metastatic prostate tumors](https://www.nature.com/articles/s41467-022-34012-2) (2022) - Methylome analysis for prostate cancer staging.
 - [Tumor fractions deciphered from circulating cell-free DNA methylation for cancer early diagnosis](https://www.nature.com/articles/s41467-022-35320-3) (2022) - Bayesian modeling for tumor fraction estimation.
 - [DISMIR: Deep learning-based noninvasive cancer detection by integrating DNA sequence and methylation information of individual cell-free DNA reads](https://academic.oup.com/bib/article/22/6/bbab250/6318194) (2021) - Hybrid sequence model (ConvNet+LSTM) for HCC detection with maximization of tumor fraction posterior probability.
+- [A mathematical model of ctDNA shedding predicts tumor detection size](https://doi.org/10.1126/sciadv.abc4308) (2020) - _Add one sentence naming the exact model and task_.
 - [CancerDetector: ultrasensitive and non-invasive cancer detection at the resolution of individual reads using cell-free DNA methylation sequencing data](https://academic.oup.com/nar/article/46/15/e89/5036349) (2018) - Statistical model for read-level cancer detection from cfDNA.
 <!-- AUTO-PAPERS:LIQUID_BIOPSY END -->
 
