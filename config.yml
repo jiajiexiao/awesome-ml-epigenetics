@@ -21,6 +21,13 @@ categories:
   dna_methylation:
     slug: dna-methylation
     readme_marker: DNA_METHYLATION
+    boundary: >
+      Array-based (450K/EPIC) or sequencing-based (WGBS/RRBS/bisulfite) DNA methylation
+      analysis on bulk tissue, single cells, or organoids — including aging clocks,
+      epigenetic biomarkers, and methylation imputation. The input must be methylation
+      profiles from solid tissue or cultured cells, NOT cell-free DNA from blood/plasma.
+      Papers whose primary application is cfDNA-based non-invasive cancer detection belong
+      in liquid-biopsy, even if they use methylation signals.
     search_terms:
       - "DNA methylation machine learning"
       - "DNA methylation deep learning"
@@ -45,6 +52,11 @@ categories:
   histone_modifications:
     slug: histone-modifications
     readme_marker: HISTONE_MODIFICATIONS
+    boundary: >
+      Prediction, profiling, or analysis of histone post-translational modifications
+      (H3K4me3, H3K27ac, H3K27me3, etc.) using ML/DL, typically from ChIP-seq or
+      CUT&TAG data. Does NOT include general chromatin-accessibility studies (ATAC-seq
+      without histone marks) — those belong in chromatin-accessibility.
     search_terms:
       - "histone modification deep learning"
       - "histone modification machine learning"
@@ -66,6 +78,11 @@ categories:
   chromatin_accessibility:
     slug: chromatin-accessibility
     readme_marker: CHROMATIN_ACCESSIBILITY
+    boundary: >
+      ML/DL models for open-chromatin profiling (ATAC-seq, DNase-seq, scATAC-seq),
+      enhancer/promoter activity prediction, or 3D genome organisation (Hi-C, TADs,
+      chromatin loops). Does NOT include histone-mark ChIP-seq (→ histone-modifications)
+      or cfDNA fragmentomics (→ liquid-biopsy).
     search_terms:
       - "chromatin accessibility machine learning"
       - "ATAC-seq deep learning"
@@ -89,6 +106,12 @@ categories:
   multi_omics:
     slug: multi-omics
     readme_marker: MULTI_OMICS
+    boundary: >
+      Joint analysis or integration of two or more epigenomic modalities (e.g. scRNA +
+      scATAC, methylome + transcriptome), gene regulatory network inference, or
+      single-cell multi-omics. Papers that study a single modality in isolation belong
+      in the modality-specific category even if multiple omics datasets are mentioned
+      peripherally.
     search_terms:
       - "multi-omics integration deep learning epigenetics"
       - "single-cell epigenomics machine learning"
@@ -111,6 +134,13 @@ categories:
   liquid_biopsy:
     slug: liquid-biopsy
     readme_marker: LIQUID_BIOPSY
+    boundary: >
+      ML/DL applied to cell-free DNA (cfDNA) or circulating tumor DNA (ctDNA) from
+      blood, plasma, urine, or other liquid samples for non-invasive clinical tasks
+      (cancer detection, tissue-of-origin, monitoring, fragmentomics). The defining
+      feature is the cell-free / liquid-sample origin — the signal may be methylation,
+      fragment size, end-motifs, or copy-number variation. Papers using methylation on
+      solid-tissue or array samples belong in dna-methylation, not here.
     search_terms:
       - "cell-free DNA machine learning methylation"
       - "cfDNA deep learning cancer detection"
@@ -135,6 +165,12 @@ categories:
   novel_assays:
     slug: novel-assays
     readme_marker: NOVEL_ASSAYS
+    boundary: >
+      Papers that introduce or benchmark a new epigenetic measurement technology or
+      protocol (e.g. TAPS, EM-seq, scNMT-seq, CUT&RUN). The novelty must be in the
+      assay/sequencing chemistry itself. Papers that merely apply an existing assay with
+      a new ML model belong in the modality-specific category (dna-methylation,
+      histone-modifications, etc.).
     search_terms:
       - "novel epigenetic sequencing method machine learning"
       - "DNA methylation assay new technology"
@@ -157,6 +193,10 @@ categories:
   datasets:
     slug: datasets
     readme_marker: DATASETS
+    boundary: >
+      Public databases, atlases, or curated benchmark collections of epigenomic data
+      (e.g. ENCODE, Roadmap Epigenomics, GEO methylation atlases). The primary
+      contribution must be the data resource itself, not a model trained on it.
     search_terms:
       - "epigenomics database resource methylation benchmark"
       - "epigenetics atlas multi-tissue dataset"

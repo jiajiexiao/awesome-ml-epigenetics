@@ -7,6 +7,25 @@ import re
 from enum import Enum
 from typing import Dict, List, Optional
 
+# Matches the embedded DOI in biorxiv/medrxiv content URLs.
+_BIORXIV_DOI_RE = re.compile(
+    r"(?:biorxiv|medrxiv)\.org/content/(10\.\d{4,}/[^\s?#\"']+)",
+    re.I,
+)
+
+
+def extract_doi_from_url(url: str) -> str:
+    """Return a normalised DOI extracted from a biorxiv/medrxiv URL, or ''."""
+    m = _BIORXIV_DOI_RE.search(url or "")
+    if not m:
+        return ""
+    raw = m.group(1).lower().rstrip("/").rstrip(".")
+    # Drop .full / .abstract / .pdf page suffixes before stripping version.
+    raw = re.sub(r"\.(full|abstract|pdf)$", "", raw)
+    # Drop preprint version suffix (v1, v2, …).
+    raw = re.sub(r"v\d+$", "", raw).rstrip(".")
+    return raw
+
 
 class PubType(str, Enum):
     PEER_REVIEWED = "peer-reviewed"
@@ -67,10 +86,17 @@ class CandidatePaper:
     # ── Helpers ────────────────────────────────────────────────────────────
     @property
     def normalized_doi(self) -> str:
-        """Lowercase stripped DOI for dedup."""
+        """Lowercase stripped DOI for dedup.
+
+        Strips doi.org prefix, preprint version suffixes (v1, v2 …), and falls
+        back to extracting a DOI from the paper URL for biorxiv/medrxiv links.
+        """
         doi = (self.doi or "").strip().lower()
         doi = re.sub(r"^https?://doi\.org/", "", doi)
-        return doi.rstrip(".")
+        doi = re.sub(r"v\d+$", "", doi).rstrip(".")
+        if not doi:
+            doi = extract_doi_from_url(self.url)
+        return doi
 
     @property
     def normalized_url(self) -> str:
